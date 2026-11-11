@@ -68,7 +68,8 @@ main() {
 
   say "Installing vio ($version, $os/$arch)"
   info "downloading $archive"
-  download "$base/$archive" "$tmp/$archive" || err "download failed: $base/$archive"
+  download "$base/$archive" "$tmp/$archive" ||
+    err "could not download $base/$archive. If no release has been published yet, build from source: go install github.com/$REPO/cmd/vio@latest"
   download "$base/checksums.txt" "$tmp/checksums.txt" || err "download failed: $base/checksums.txt"
 
   # Accept both "hash  file" and binary-mode "hash *file" lines.

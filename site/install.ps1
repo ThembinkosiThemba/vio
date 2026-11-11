@@ -37,7 +37,16 @@
     try {
         Write-Host "Installing vio ($version, windows/$arch)" -ForegroundColor White
         Write-Host "  downloading $zip"
-        Invoke-WebRequest -UseBasicParsing -Uri "$base/$zip" -OutFile (Join-Path $tmp $zip)
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri "$base/$zip" -OutFile (Join-Path $tmp $zip)
+        }
+        catch {
+            $status = $_.Exception.Response.StatusCode.value__
+            if ($status -eq 404) {
+                throw "vio: no release found for $version ($base/$zip). If none has been published yet, build from source: go install github.com/$repo/cmd/vio@latest"
+            }
+            throw "vio: download failed: $base/$zip ($($_.Exception.Message))"
+        }
         Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt" -OutFile (Join-Path $tmp 'checksums.txt')
 
         $line = Get-Content (Join-Path $tmp 'checksums.txt') | Where-Object { ($_ -split '\s+')[1] -eq $zip }
