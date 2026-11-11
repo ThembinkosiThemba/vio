@@ -1,0 +1,23 @@
+# Build output
+/vio
+/vio.exe
+/bin/
+/dist/
+
+# Go
+*.test
+*.out
+coverage.*
+
+# Local config / secrets
+.env
+.env.*
+hosts.yaml
+*.pem
+*.key
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
