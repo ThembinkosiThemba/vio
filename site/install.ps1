@@ -8,10 +8,11 @@
 #   VIO_DOWNLOAD_URL base URL for release assets (mirrors, testing)
 #   VIO_NO_MODIFY_PATH=1  don't add the install dir to your user PATH
 #
-# Runs inside a script block so nothing leaks into your session, and throws
-# instead of calling exit so a failure never closes your terminal.
+# Runs inside a script block so nothing leaks into your session. Failures print
+# one clean error line and never call exit, so your terminal stays open.
 
 & {
+  try {
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -76,4 +77,10 @@
     finally {
         Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
     }
+  }
+  catch {
+    # Show our message alone, not PowerShell's error record.
+    Write-Host ''
+    Write-Host ('error: ' + ($_.Exception.Message -replace '^vio: ', '')) -ForegroundColor Red
+  }
 }
