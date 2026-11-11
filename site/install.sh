@@ -1,7 +1,7 @@
 #!/bin/sh
 # vio installer for Linux and macOS.
 #
-#   curl -fsSL https://raw.githubusercontent.com/ThembinkosiThemba/vio/master/site/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/ThembinkosiThemba/vio/main/site/install.sh | sh
 #
 # Environment overrides:
 #   VIO_VERSION      release tag to install (default: latest), e.g. v0.1.0
@@ -43,7 +43,7 @@ main() {
   os=$(uname -s | tr '[:upper:]' '[:lower:]')
   case "$os" in
     linux|darwin) ;;
-    *) err "unsupported OS '$os'. On Windows run: irm https://raw.githubusercontent.com/$REPO/master/site/install.ps1 | iex" ;;
+    *) err "unsupported OS '$os'. On Windows run: irm https://raw.githubusercontent.com/$REPO/main/site/install.ps1 | iex" ;;
   esac
 
   arch=$(uname -m)

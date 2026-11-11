@@ -1,6 +1,6 @@
 # vio installer for Windows.
 #
-#   irm https://raw.githubusercontent.com/ThembinkosiThemba/vio/master/site/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/ThembinkosiThemba/vio/main/site/install.ps1 | iex
 #
 # Environment overrides:
 #   VIO_VERSION      release tag to install (default: latest), e.g. v0.1.0

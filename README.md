@@ -78,13 +78,13 @@ approve plan p-7f3a91? [y/N] y
 **macOS / Linux**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ThembinkosiThemba/vio/master/site/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/ThembinkosiThemba/vio/main/site/install.sh | sh
 ```
 
 **Windows (PowerShell)**
 
 ```powershell
-irm https://raw.githubusercontent.com/ThembinkosiThemba/vio/master/site/install.ps1 | iex
+irm https://raw.githubusercontent.com/ThembinkosiThemba/vio/main/site/install.ps1 | iex
 ```
 
 Then run `vio`. The installers download the latest release, verify its SHA-256
