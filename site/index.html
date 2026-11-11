@@ -10,7 +10,9 @@
 <meta property="og:title" content="vio — the safety-first agent for your servers">
 <meta property="og:description" content="A tiny agent that runs and secures your servers. Agentless over SSH. The model proposes, the code disposes.">
 <meta property="og:type" content="website">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="img/favicon-32.png" sizes="32x32" type="image/png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="img/favicon-32-white.png" sizes="32x32" type="image/png" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <style>
 :root {
   --bg: #0b0a10;
@@ -93,8 +95,9 @@ img, svg { display: block; }
   border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 .nav .wrap { display: flex; align-items: center; gap: 24px; height: 60px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
-.brand svg { width: 28px; height: 28px; }
+.brand { display: flex; align-items: center; }
+.brand img { height: 28px; width: auto; }
+footer .brand img { height: 22px; }
 .nav-links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; color: var(--muted); }
 .nav-links a:hover { color: var(--text); }
 .nav-links .hide-sm { display: none; }
@@ -318,7 +321,7 @@ h2 { margin: 10px 0 14px; font-size: clamp(30px, 4.4vw, 44px); line-height: 1.1;
     radial-gradient(500px 220px at 50% 0%, var(--bg-glow), transparent 75%),
     var(--surface);
 }
-.final svg.logo { width: 64px; height: 64px; margin: 0 auto 20px; }
+.final .logo img { width: 72px; height: 72px; margin: 0 auto 20px; }
 .final h2 { margin-top: 0; }
 .final .sub { margin: 0 auto; }
 
@@ -337,15 +340,6 @@ footer a:hover { color: var(--text); }
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <linearGradient id="vio-bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#4C1D95"/>
-    </linearGradient>
-    <symbol id="logo" viewBox="0 0 64 64">
-      <rect width="64" height="64" rx="15" fill="url(#vio-bg)"/>
-      <path d="M32 11.5 48.5 17.5V30c0 10.6-6.9 18.6-16.5 22.5C22.4 48.6 15.5 40.6 15.5 30V17.5Z" fill="none" stroke="#fff" stroke-width="3.6" stroke-linejoin="round"/>
-      <path d="m24.5 26.5 6 5.5-6 5.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M33.5 38.5h7" stroke="#DDD6FE" stroke-width="3.6" stroke-linecap="round"/>
-    </symbol>
     <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
     <symbol id="i-github" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></symbol>
@@ -354,7 +348,12 @@ footer a:hover { color: var(--text); }
 
 <header class="nav">
   <div class="wrap">
-    <a class="brand" href="#top" aria-label="vio home"><svg><use href="#logo"/></svg>vio</a>
+    <a class="brand" href="#top" aria-label="vio home">
+      <picture>
+        <source srcset="img/logo-white.png" media="(prefers-color-scheme: dark)">
+        <img src="img/logo-black.png" alt="vio" width="91" height="28">
+      </picture>
+    </a>
     <nav class="nav-links">
       <a href="#how" class="hide-sm">How it works</a>
       <a href="#guard" class="hide-sm">Lockout guard</a>
@@ -515,7 +514,10 @@ footer a:hover { color: var(--text); }
   <section>
     <div class="wrap">
       <div class="final">
-        <svg class="logo" aria-hidden="true"><use href="#logo"/></svg>
+        <picture class="logo">
+          <source srcset="img/mark-white.png" media="(prefers-color-scheme: dark)">
+          <img src="img/mark-black.png" alt="" width="72" height="72">
+        </picture>
         <h2>Give your servers an agent you can trust</h2>
         <p class="sub">vio is Apache-2.0 and in early development. Star the repo to follow along, or read the architecture and help shape it.</p>
         <div class="cta">
@@ -529,7 +531,12 @@ footer a:hover { color: var(--text); }
 
 <footer>
   <div class="wrap">
-    <a class="brand" href="#top"><svg><use href="#logo"/></svg>vio</a>
+    <a class="brand" href="#top" aria-label="vio home">
+      <picture>
+        <source srcset="img/logo-white.png" media="(prefers-color-scheme: dark)">
+        <img src="img/logo-black.png" alt="vio" width="71" height="22">
+      </picture>
+    </a>
     <span>Apache-2.0 · © 2026 The vio Authors</span>
     <nav>
       <a href="https://github.com/ThembinkosiThemba/vio">GitHub</a>

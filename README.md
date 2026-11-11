@@ -1,8 +1,9 @@
 <p align="center">
-  <img src="assets/vio.svg" width="96" height="96" alt="vio logo">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="site/img/logo-white.png">
+    <img src="site/img/logo-black.png" height="64" alt="vio">
+  </picture>
 </p>
-
-<h1 align="center">vio</h1>
 
 <p align="center">
   <b>A tiny, safety-first agent that runs and secures your servers.</b><br>
