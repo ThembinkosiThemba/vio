@@ -12,13 +12,16 @@ import (
 	"time"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/ThembinkosiThemba/vio/internal/fsutil"
 )
 
 // Config is the contents of config.yaml. Precedence: flags > env > file > defaults.
 type Config struct {
+	// Provider is empty until the operator picks one; `vio` then runs setup.
 	Provider    string        `yaml:"provider"`
 	Model       string        `yaml:"model"`
-	SmallModel  string        `yaml:"small_model"`
+	BaseURL     string        `yaml:"base_url"`
 	MaxTier     string        `yaml:"max_tier"`
 	GuardWindow time.Duration `yaml:"guard_window"`
 	Budget      Budget        `yaml:"budget"`
@@ -33,9 +36,6 @@ type Budget struct {
 // Default returns the built-in configuration.
 func Default() Config {
 	return Config{
-		Provider:    "anthropic",
-		Model:       "claude-sonnet-5-5",
-		SmallModel:  "claude-haiku-5-5",
 		MaxTier:     "change",
 		GuardWindow: 120 * time.Second,
 		Budget:      Budget{MaxTurns: 40, MaxCostUSD: 2.00},
@@ -154,6 +154,9 @@ func Load(path string) (Config, error) {
 	if v := os.Getenv("VIO_MODEL"); v != "" {
 		c.Model = v
 	}
+	if v := os.Getenv("VIO_BASE_URL"); v != "" {
+		c.BaseURL = v
+	}
 	if v := os.Getenv("VIO_MAX_TIER"); v != "" {
 		c.MaxTier = v
 	}
@@ -163,14 +166,73 @@ func Load(path string) (Config, error) {
 	return c, nil
 }
 
-// DefaultFile is the commented config.yaml written by `vio init`.
-const DefaultFile = `# vio configuration. See specs/plan.md §5.16.
-provider: anthropic          # anthropic | openai (any OpenAI-compatible endpoint)
-model: claude-sonnet-5-5
-small_model: claude-haiku-5-5
-max_tier: change             # observe | change | dangerous — ceiling for any run
-guard_window: 120s           # lockout auto-revert window (min 30s)
+// Render returns c as a commented config.yaml.
+func Render(c Config) string {
+	return fmt.Sprintf(`# vio configuration. Environment variables (VIO_PROVIDER, VIO_MODEL,
+# VIO_BASE_URL) override these values. API keys live in credentials.yaml.
+
+# Model provider: ollama | anthropic | openai | openrouter | openai-compatible
+provider: %q
+model: %q
+# Server URL for ollama or openai-compatible providers. Empty uses the default.
+base_url: %q
+
+# Highest tool tier any run may use: observe | change | dangerous
+max_tier: %s
+# How long a risky change waits for a fresh login before reverting (min 30s)
+guard_window: %s
+
 budget:
-  max_turns: 40
-  max_cost_usd: 2.00
-`
+  max_turns: %d       # model calls per message
+  max_cost_usd: %.2f
+`, c.Provider, c.Model, c.BaseURL, c.MaxTier, c.GuardWindow, c.Budget.MaxTurns, c.Budget.MaxCostUSD)
+}
+
+// DefaultFile is the config.yaml written by `vio init`.
+var DefaultFile = Render(Default())
+
+// Save writes c to path with owner-only permissions.
+func Save(path string, c Config) error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	return fsutil.WriteFileAtomic(path, []byte(Render(c)), 0o600)
+}
+
+// CredentialsFile holds API keys, one per provider, readable only by the owner.
+func (p Paths) CredentialsFile() string { return filepath.Join(p.ConfigDir, "credentials.yaml") }
+
+// LoadKey returns the stored API key for provider, or "".
+func LoadKey(p Paths, provider string) (string, error) {
+	data, err := os.ReadFile(p.CredentialsFile())
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	var keys map[string]string
+	if err := yaml.Unmarshal(data, &keys); err != nil {
+		return "", fmt.Errorf("parse %s: %w", p.CredentialsFile(), err)
+	}
+	return keys[provider], nil
+}
+
+// SaveKey stores an API key for provider.
+func SaveKey(p Paths, provider, key string) error {
+	keys := map[string]string{}
+	if data, err := os.ReadFile(p.CredentialsFile()); err == nil {
+		if err := yaml.Unmarshal(data, &keys); err != nil {
+			return fmt.Errorf("parse %s: %w", p.CredentialsFile(), err)
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	keys[provider] = key
+	data, err := yaml.Marshal(keys)
+	if err != nil {
+		return err
+	}
+	header := []byte("# API keys for vio's model providers. Keep this file private.\n")
+	return fsutil.WriteFileAtomic(p.CredentialsFile(), append(header, data...), 0o600)
+}

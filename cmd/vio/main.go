@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -31,12 +32,15 @@ const (
 	exitRevert   = 6
 )
 
-const usage = `vio — a tiny, safety-first agent that runs and secures your servers
+const usage = `vio: the tiny server agent
 
 Usage:
+  vio                       start a chat with the agent
   vio <command> [arguments]
 
 Commands:
+  ask "<question>"          ask one question and exit
+  setup                     choose the model provider
   init                      create config, inventory, and state directories
   hosts add <name> ...      add a host to the inventory
   hosts ls                  list hosts
@@ -47,15 +51,20 @@ Commands:
   version                   print version information
 
 Coming in later phases:
-  ask, check, plan, apply, rollback
+  check, plan, apply, rollback
 
 Run 'vio <command> -h' for command help.
 `
 
 func main() {
+	args := os.Args[1:]
+	if len(args) == 0 {
+		// The chat handles Ctrl-C itself: it stops the current reply, not vio.
+		os.Exit(run(context.Background(), args, os.Stdin, os.Stdout, os.Stderr))
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	os.Exit(run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+	os.Exit(run(ctx, args, os.Stdin, os.Stdout, os.Stderr))
 }
 
 // app carries the process-wide dependencies of every command.
@@ -70,6 +79,35 @@ type app struct {
 
 	pwMu  sync.Mutex
 	pwMem map[string][]byte
+
+	// in is the single buffered reader over stdin; every prompt must use it so
+	// no command steals bytes buffered for another.
+	in *bufio.Reader
+
+	// pauseHook, when set, clears transient output (the chat spinner) before vio
+	// prints a prompt of its own.
+	pauseHook func()
+}
+
+func (a *app) pause() {
+	if a.pauseHook != nil {
+		a.pauseHook()
+	}
+}
+
+// readLine reads one line of input (without the newline).
+func (a *app) readLine() (string, error) {
+	if a.in == nil {
+		if a.stdin == nil {
+			return "", io.EOF
+		}
+		a.in = bufio.NewReader(a.stdin)
+	}
+	line, err := a.in.ReadString('\n')
+	if err != nil && line == "" {
+		return "", err
+	}
+	return strings.TrimRight(line, "\r\n"), nil
 }
 
 type usageError struct{ msg string }
@@ -87,16 +125,15 @@ type exitErr struct {
 func (e *exitErr) Error() string { return e.err.Error() }
 
 func run(ctx context.Context, args []string, stdin *os.File, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprint(stderr, usage)
-		return exitUsage
-	}
 	paths, err := config.DefaultPaths()
 	if err != nil {
 		fmt.Fprintf(stderr, "vio: %v\n", err)
 		return exitError
 	}
 	a := &app{stdin: stdin, stdout: stdout, stderr: stderr, paths: paths}
+	if len(args) == 0 {
+		return a.exitCode(a.cmdChat())
+	}
 
 	cmd, rest := args[0], args[1:]
 	switch cmd {
@@ -112,7 +149,11 @@ func run(ctx context.Context, args []string, stdin *os.File, stdout, stderr io.W
 		err = a.cmdHosts(ctx, rest)
 	case "log":
 		err = a.cmdLog(rest)
-	case "ask", "check":
+	case "ask":
+		err = a.cmdAsk(ctx, rest)
+	case "setup":
+		_, err = a.setup(ctx)
+	case "check":
 		err = notYet(cmd, 1)
 	case "plan", "apply", "rollback":
 		err = notYet(cmd, 2)
@@ -209,9 +250,9 @@ func (a *app) confirm(question string) bool {
 	if !a.isTTY() {
 		return false
 	}
+	a.pause()
 	fmt.Fprintf(a.stderr, "%s [y/N] ", question)
-	var line string
-	_, _ = fmt.Fscanln(a.stdin, &line)
+	line, _ := a.readLine()
 	line = strings.ToLower(strings.TrimSpace(line))
 	return line == "y" || line == "yes"
 }
@@ -227,6 +268,7 @@ func (a *app) passphrase(path string) ([]byte, error) {
 	if !a.isTTY() {
 		return nil, fmt.Errorf("ssh key %s is encrypted and stdin is not a terminal; load it into ssh-agent", path)
 	}
+	a.pause()
 	fmt.Fprintf(a.stderr, "Passphrase for %s: ", path)
 	pw, err := term.ReadPassword(int(a.stdin.Fd()))
 	fmt.Fprintln(a.stderr)

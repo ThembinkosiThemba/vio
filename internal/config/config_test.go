@@ -29,6 +29,32 @@ func TestDefaultFileParses(t *testing.T) {
 	}
 }
 
+func TestSaveRoundTripAndKeys(t *testing.T) {
+	dir := t.TempDir()
+	p := Paths{ConfigDir: dir, StateDir: dir}
+	c := Default()
+	c.Provider, c.Model, c.BaseURL = "ollama", "qwen3:8b", "http://gpu-box:11434/v1"
+	if err := Save(p.ConfigFile(), c); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(p.ConfigFile())
+	if err != nil || got != c {
+		t.Fatalf("round trip = %+v, %v; want %+v", got, err, c)
+	}
+
+	if k, err := LoadKey(p, "anthropic"); k != "" || err != nil {
+		t.Errorf("missing credentials = %q, %v", k, err)
+	}
+	SaveKey(p, "anthropic", "sk-ant-1")
+	SaveKey(p, "openai", "sk-2")
+	if k, _ := LoadKey(p, "anthropic"); k != "sk-ant-1" {
+		t.Errorf("anthropic key = %q", k)
+	}
+	if k, _ := LoadKey(p, "openai"); k != "sk-2" {
+		t.Errorf("openai key = %q", k)
+	}
+}
+
 func TestLoadOverrides(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	os.WriteFile(path, []byte("model: from-file\nguard_window: 45s\n"), 0o600)

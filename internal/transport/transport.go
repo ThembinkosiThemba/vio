@@ -59,6 +59,29 @@ type Executor interface {
 	Close() error
 }
 
+// Elevated returns an Executor whose commands and file operations all run
+// under `sudo -n`.
+func Elevated(x Executor) Executor { return elevated{x} }
+
+type elevated struct{ Executor }
+
+func (e elevated) Run(ctx context.Context, c Cmd) (Result, error) {
+	c.Sudo = true
+	return e.Executor.Run(ctx, c)
+}
+
+func (e elevated) ReadFile(ctx context.Context, path string, max int64) ([]byte, FileInfo, error) {
+	return readFile(ctx, e.Executor, true, path, max)
+}
+
+func (e elevated) WriteFile(ctx context.Context, path string, data []byte, mode fs.FileMode) error {
+	return writeFile(ctx, e.Executor, true, path, data, mode)
+}
+
+func (e elevated) Stat(ctx context.Context, path string) (FileInfo, error) {
+	return statFile(ctx, e.Executor, true, path)
+}
+
 // ErrTimeout is returned when a command exceeds its timeout.
 var ErrTimeout = errors.New("command timed out")
 

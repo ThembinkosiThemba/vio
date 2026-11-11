@@ -3,8 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -36,6 +39,51 @@ func runCLI(t *testing.T, args ...string) (int, string, string) {
 	var out, errb bytes.Buffer
 	code := run(context.Background(), args, nil, &out, &errb)
 	return code, out.String(), errb.String()
+}
+
+func TestCLIAskEndToEnd(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Model    string `json:"model"`
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		if req.Model != "local-model" || len(req.Messages) != 2 || req.Messages[1].Content != "is web-1 ok?" {
+			http.Error(w, "unexpected request", 400)
+			return
+		}
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"No servers yet, \"}}]}\n\n")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"add one first.\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	t.Setenv("VIO_CONFIG_DIR", t.TempDir())
+	state := t.TempDir()
+	t.Setenv("VIO_STATE_DIR", state)
+	t.Setenv("VIO_PROVIDER", "openai-compatible")
+	t.Setenv("VIO_MODEL", "local-model")
+	t.Setenv("VIO_BASE_URL", srv.URL)
+
+	code, out, errOut := runCLI(t, "ask", "is web-1 ok?")
+	if code != 0 || !strings.Contains(out, "No servers yet, add one first.") {
+		t.Fatalf("exit %d\nstdout: %s\nstderr: %s", code, out, errOut)
+	}
+	recs, _ := audit.ReadAll(state + "/audit.jsonl")
+	if len(recs) == 0 || recs[0].Kind != audit.KindSessionStart || recs[0].Msg != "local-model via openai-compatible" {
+		t.Errorf("audit = %+v", recs)
+	}
+}
+
+func TestCLIAskWithoutProvider(t *testing.T) {
+	t.Setenv("VIO_CONFIG_DIR", t.TempDir())
+	t.Setenv("VIO_STATE_DIR", t.TempDir())
+	code, _, errOut := runCLI(t, "ask", "hi")
+	if code != 1 || !strings.Contains(errOut, "vio setup") {
+		t.Fatalf("exit %d, stderr: %s", code, errOut)
+	}
 }
 
 func TestCLIInventoryFlow(t *testing.T) {

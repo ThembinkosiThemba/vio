@@ -197,6 +197,7 @@ func (a *app) hostsTrust(ctx context.Context, args []string) error {
 // an expected fingerprint or by confirming on a terminal. It never replaces a
 // key that is already recorded.
 func (a *app) trust(ctx context.Context, h *inventory.Host, expectFP string) error {
+	a.pause()
 	hk := a.hostKeys()
 	addr := h.Endpoint()
 	key, err := transport.FetchHostKey(ctx, addr, hk.Algorithms(addr), 0)
