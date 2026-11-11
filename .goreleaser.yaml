@@ -19,7 +19,10 @@ builds:
     goarch: [amd64, arm64]
 
 archives:
-  - formats: [tar.gz]
+  # Stable, version-less names so install.sh / install.ps1 can use
+  # releases/latest/download/vio_<os>_<arch>.<ext>.
+  - name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
         formats: [zip]

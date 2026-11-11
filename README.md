@@ -75,11 +75,23 @@ approve plan p-7f3a91? [y/N] y
 
 ## Install
 
-vio isn't released yet. To build from source (Go 1.26+):
+**macOS / Linux**
 
 ```sh
-go install github.com/ThembinkosiThemba/vio/cmd/vio@latest
+curl -fsSL https://raw.githubusercontent.com/ThembinkosiThemba/vio/master/site/install.sh | sh
 ```
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://raw.githubusercontent.com/ThembinkosiThemba/vio/master/site/install.ps1 | iex
+```
+
+Then run `vio`. The installers download the latest release, verify its SHA-256
+checksum, and put the binary on your PATH. Set `VIO_VERSION=v0.1.0` to pin a version.
+
+> No release is tagged yet. Until then, build from source (Go 1.26+):
+> `go install github.com/ThembinkosiThemba/vio/cmd/vio@latest`
 
 ## Usage (planned)
 
