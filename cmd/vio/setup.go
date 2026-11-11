@@ -189,7 +189,7 @@ func required(what string) func(string) error {
 
 // spinWhile shows a spinner line while fn runs (terminal only).
 func spinWhile(a *app, label string, fn func()) {
-	if !newStyle(a.stdout).on {
+	if !colorTerminal(a.stdout) {
 		fn()
 		return
 	}

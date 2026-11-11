@@ -16,8 +16,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: go build ./...
@@ -32,10 +32,10 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Latest 1.26 patch so govulncheck checks against a patched stdlib
       # (e.g. GO-2026-5972 is fixed in 1.26.6) while go.mod stays at 1.26.5.
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26.x"
           check-latest: true
@@ -48,16 +48,40 @@ jobs:
       - name: go mod tidy
         run: go mod tidy && git diff --exit-code go.mod go.sum
 
-  snapshot:
+  # A full release rehearsal on every push: same GoReleaser config as a tag,
+  # minus signing and publishing. Catches packaging breakage before tagging.
+  release-dry-run:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
-      - uses: goreleaser/goreleaser-action@v6
+          go-version: "1.26.x"
+          check-latest: true
+      - uses: anchore/sbom-action/download-syft@v0
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: build --snapshot --clean
+          args: release --snapshot --clean --skip=sign,publish
+      - name: installer assets exist
+        run: |
+          set -eu
+          ls -la dist
+          for f in vio_linux_amd64.tar.gz vio_linux_arm64.tar.gz \
+                   vio_darwin_amd64.tar.gz vio_darwin_arm64.tar.gz \
+                   vio_windows_amd64.zip vio_windows_arm64.zip checksums.txt; do
+            test -f "dist/$f" || { echo "missing dist/$f (install.sh / install.ps1 download it)"; exit 1; }
+          done
+          # Each archive must be listed in checksums.txt and must contain the binary.
+          for f in dist/vio_*.tar.gz dist/vio_*.zip; do
+            grep -q " $(basename "$f")\$" dist/checksums.txt || { echo "no checksum for $f"; exit 1; }
+          done
+          tar -tzf dist/vio_linux_amd64.tar.gz | grep -qx vio
+          unzip -l dist/vio_windows_amd64.zip | grep -q ' vio.exe$'
+      - name: installer works against the rehearsal
+        run: |
+          set -eu
+          VIO_DOWNLOAD_URL="file://$PWD/dist" VIO_INSTALL_DIR="$RUNNER_TEMP/bin" sh site/install.sh
+          "$RUNNER_TEMP/bin/vio" version

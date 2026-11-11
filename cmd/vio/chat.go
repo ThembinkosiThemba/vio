@@ -609,7 +609,7 @@ type termUI struct {
 }
 
 func newTermUI(a *app) *termUI {
-	return &termUI{a: a, w: a.stdout, color: newStyle(a.stdout).on, atStart: true}
+	return &termUI{a: a, w: a.stdout, color: colorTerminal(a.stdout), atStart: true}
 }
 
 // begin starts a turn: the spinner shows elapsed time from start.
