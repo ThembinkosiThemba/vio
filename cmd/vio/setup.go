@@ -6,14 +6,18 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
+	"sync"
+	"time"
 
-	"golang.org/x/term"
+	"github.com/charmbracelet/huh"
 
 	"github.com/ThembinkosiThemba/vio/internal/config"
 	"github.com/ThembinkosiThemba/vio/internal/llm"
 )
+
+// Claude models offered in the picker; any other id can be set in config.yaml.
+var anthropicModels = []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"}
 
 // setup asks which model provider to use, saves the choice, and returns it.
 func (a *app) setup(ctx context.Context) (config.Config, error) {
@@ -28,152 +32,208 @@ func (a *app) setup(ctx context.Context) (config.Config, error) {
 	if err != nil {
 		cfg = config.Default()
 	}
-	st := newStyle(a.stdout)
-	out := a.stdout
 
-	fmt.Fprintf(out, "\n  %s\n\n", st.bold("Which model should vio use?"))
-	def := 1
+	provider := cfg.Provider
+	if provider == "" {
+		provider = llm.Providers[0].ID
+	}
+	opts := make([]huh.Option[string], len(llm.Providers))
 	for i, p := range llm.Providers {
-		if p.ID == cfg.Provider {
-			def = i + 1
-		}
-		fmt.Fprintf(out, "  %s  %s\n", st.dim(strconv.Itoa(i+1)), p.Label)
+		opts[i] = huh.NewOption(p.Label, p.ID)
 	}
-	fmt.Fprintln(out)
-	var info llm.ProviderInfo
-	for {
-		n, err := strconv.Atoi(a.ask("Provider", strconv.Itoa(def)))
-		if err == nil && n >= 1 && n <= len(llm.Providers) {
-			info = llm.Providers[n-1]
-			break
-		}
-		fmt.Fprintf(out, "  %s\n", st.yellow("Pick a number from the list."))
+	fmt.Fprintln(a.stdout)
+	if err := runForm(huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Which model provider should vio use?").
+			Description("You can change this any time with /setup.").
+			Options(opts...).
+			Value(&provider),
+	)); err != nil {
+		return cfg, err
 	}
+	info, _ := llm.Lookup(provider)
 
 	base := info.BaseURL
 	if cfg.Provider == info.ID && cfg.BaseURL != "" {
 		base = cfg.BaseURL
 	}
-	if info.ID == "ollama" || info.ID == "openai-compatible" {
-		for {
-			base = a.ask("Server URL", base)
-			if base != "" {
-				break
-			}
-		}
-	}
-
-	key, keyFromEnv := "", ""
+	keyFromEnv := ""
 	if info.KeyEnv != "" {
 		keyFromEnv = os.Getenv(info.KeyEnv)
 	}
+	var key string
+	var fields []huh.Field
+	if info.ID == "ollama" || info.ID == "openai-compatible" {
+		fields = append(fields, huh.NewInput().
+			Title("Server URL").
+			Description("The OpenAI-compatible endpoint, usually ending in /v1.").
+			Placeholder("http://localhost:8000/v1").
+			Value(&base).
+			Validate(required("a URL")))
+	}
 	switch {
 	case keyFromEnv != "":
-		fmt.Fprintf(out, "  %s\n", st.dim("Using "+info.KeyEnv+" from your environment."))
-	case info.ID == "ollama":
+	case info.KeyEnv != "":
+		fields = append(fields, huh.NewInput().
+			Title(info.Label+" API key").
+			Description("Saved to "+a.paths.CredentialsFile()+", readable only by you.").
+			EchoMode(huh.EchoModePassword).
+			Value(&key).
+			Validate(required("an API key")))
 	case info.ID == "openai-compatible":
-		key = a.askSecret("API key (leave empty if none)")
-	default:
-		for key == "" {
-			key = a.askSecret(info.Label + " API key")
+		fields = append(fields, huh.NewInput().
+			Title("API key").
+			Description("Leave empty if the server doesn't need one.").
+			EchoMode(huh.EchoModePassword).
+			Value(&key))
+	}
+	if len(fields) > 0 {
+		if err := runForm(huh.NewGroup(fields...)); err != nil {
+			return cfg, err
 		}
 	}
 
-	model := info.DefaultModel
-	if cfg.Provider == info.ID && cfg.Model != "" {
-		model = cfg.Model
+	if cfg.Model == "" || cfg.Provider != info.ID {
+		cfg.Model = info.DefaultModel // the old provider's model means nothing here
 	}
-	if info.ID != "anthropic" {
-		models, err := llm.ListModels(ctx, base, firstNonEmpty(key, keyFromEnv))
-		switch {
-		case err != nil && info.ID == "ollama":
-			fmt.Fprintf(out, "  %s\n", st.yellow("Couldn't reach Ollama at "+base+". Start it with `ollama serve`; you can still finish setup."))
-		case err != nil:
-			fmt.Fprintf(out, "  %s\n", st.dim("Couldn't list models ("+err.Error()+"); type the model name."))
-		case len(models) > 0 && len(models) <= 30:
-			fmt.Fprintf(out, "\n  %s\n", st.bold("Available models"))
-			for i, m := range models {
-				fmt.Fprintf(out, "  %s  %s\n", st.dim(strconv.Itoa(i+1)), m)
-			}
-			if !slices.Contains(models, model) {
-				model = models[0]
-			}
-			fmt.Fprintln(out)
-			pick := a.ask("Model (number or name)", model)
-			if n, err := strconv.Atoi(pick); err == nil && n >= 1 && n <= len(models) {
-				pick = models[n-1]
-			}
-			model = pick
-		case len(models) > 30:
-			fmt.Fprintf(out, "  %s\n", st.dim(fmt.Sprintf("%d models available.", len(models))))
-		}
-	}
-	for {
-		model = a.ask("Model", model)
-		if model != "" {
-			break
-		}
-	}
-
-	cfg.Provider, cfg.Model = info.ID, model
-	cfg.BaseURL = ""
+	cfg.Provider, cfg.BaseURL = info.ID, ""
 	if base != info.BaseURL {
 		cfg.BaseURL = base
 	}
-	if err := config.Save(a.paths.ConfigFile(), cfg); err != nil {
+	if err := a.pickModel(ctx, &cfg, strings.TrimSpace(key)); err != nil {
 		return cfg, err
 	}
 	if key != "" {
-		if err := config.SaveKey(a.paths, info.ID, key); err != nil {
+		if err := config.SaveKey(a.paths, info.ID, strings.TrimSpace(key)); err != nil {
 			return cfg, err
 		}
-		fmt.Fprintf(out, "\n  %s\n", st.dim("API key saved to "+a.paths.CredentialsFile()+" (readable only by you)."))
 	}
-	fmt.Fprintf(out, "  %s %s %s\n\n", st.green("✓"), "Using", st.bold(model+" via "+info.ID)+st.dim(". Change it any time with `vio setup`."))
 	return cfg, nil
 }
 
-// ask prompts with a default value.
-func (a *app) ask(label, def string) string {
-	st := newStyle(a.stdout)
-	if def != "" {
-		fmt.Fprintf(a.stdout, "  %s %s ", label, st.dim("["+def+"]"))
-	} else {
-		fmt.Fprintf(a.stdout, "  %s: ", label)
+// pickModel lets the operator choose a model for cfg.Provider and saves it.
+// key is a just-entered API key not yet stored.
+func (a *app) pickModel(ctx context.Context, cfg *config.Config, key string) error {
+	info, ok := llm.Lookup(cfg.Provider)
+	if !ok {
+		return fmt.Errorf("unknown provider %q", cfg.Provider)
 	}
-	line, err := a.readLine()
-	line = strings.TrimSpace(line)
-	if err != nil || line == "" {
-		return def
-	}
-	return line
-}
-
-// askSecret prompts without echo.
-func (a *app) askSecret(label string) string {
-	fmt.Fprintf(a.stdout, "  %s: ", label)
-	b, err := term.ReadPassword(int(a.stdin.Fd()))
-	fmt.Fprintln(a.stdout)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(b))
-}
-
-// provider builds the model client from config. Key precedence: VIO_API_KEY,
-// the provider's usual variable (e.g. ANTHROPIC_API_KEY), then credentials.yaml.
-func (a *app) provider(cfg config.Config) (llm.Provider, error) {
-	key := os.Getenv("VIO_API_KEY")
-	if info, ok := llm.Lookup(cfg.Provider); ok && key == "" && info.KeyEnv != "" {
-		key = os.Getenv(info.KeyEnv)
+	base := cfg.BaseURL
+	if base == "" {
+		base = info.BaseURL
 	}
 	if key == "" {
+		key = a.apiKey(cfg.Provider)
+	}
+
+	var models []string
+	note := ""
+	if info.ID == "anthropic" {
+		models = anthropicModels
+	} else {
 		var err error
-		if key, err = config.LoadKey(a.paths, cfg.Provider); err != nil {
-			return nil, err
+		spinWhile(a, "Looking for models at "+base, func() { models, err = llm.ListModels(ctx, base, key) })
+		switch {
+		case err != nil && info.ID == "ollama":
+			note = "Couldn't reach Ollama at " + base + ". Start it with `ollama serve`, then type a model name."
+		case err != nil:
+			note = "Couldn't list models (" + err.Error() + "). Type the model name."
+		case len(models) == 0 && info.ID == "ollama":
+			note = "Ollama has no models yet. Pull one with `ollama pull qwen3`, then type its name."
 		}
 	}
-	return llm.New(llm.Config{Provider: cfg.Provider, Model: cfg.Model, BaseURL: cfg.BaseURL, APIKey: key})
+
+	model := cfg.Model
+	var field huh.Field
+	if len(models) > 0 {
+		if !slices.Contains(models, model) {
+			model = models[0]
+		}
+		opts := make([]huh.Option[string], len(models))
+		for i, m := range models {
+			opts[i] = huh.NewOption(m, m)
+		}
+		field = huh.NewSelect[string]().
+			Title("Model").
+			Description(fmt.Sprintf("%d available. Type / to filter.", len(models))).
+			Options(opts...).
+			Height(min(len(models)+2, 12)).
+			Value(&model)
+	} else {
+		desc := "The model id, e.g. qwen3 or gpt-5."
+		if note != "" {
+			desc = note
+		}
+		field = huh.NewInput().Title("Model").Description(desc).Value(&model).Validate(required("a model name"))
+	}
+	if err := runForm(huh.NewGroup(field)); err != nil {
+		return err
+	}
+
+	cfg.Model = strings.TrimSpace(model)
+	if err := config.Save(a.paths.ConfigFile(), *cfg); err != nil {
+		return err
+	}
+	fmt.Fprintf(a.stdout, "  %s Using %s %s\n\n", sAccent.Render("✓"), sBold.Render(cfg.Model), sMuted.Render("via "+cfg.Provider))
+	return nil
+}
+
+func required(what string) func(string) error {
+	return func(s string) error {
+		if strings.TrimSpace(s) == "" {
+			return errors.New("enter " + what)
+		}
+		return nil
+	}
+}
+
+// spinWhile shows a spinner line while fn runs (terminal only).
+func spinWhile(a *app, label string, fn func()) {
+	if !newStyle(a.stdout).on {
+		fn()
+		return
+	}
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		t := time.NewTicker(80 * time.Millisecond)
+		defer t.Stop()
+		for i := 0; ; i++ {
+			fmt.Fprint(a.stdout, "\r  "+sAccent.Render(frames[i%len(frames)])+" "+sMuted.Render(label))
+			select {
+			case <-done:
+				fmt.Fprint(a.stdout, "\r\x1b[K")
+				return
+			case <-t.C:
+			}
+		}
+	}()
+	fn()
+	close(done)
+	wg.Wait()
+}
+
+// apiKey resolves a provider's key: VIO_API_KEY, the provider's usual variable
+// (e.g. ANTHROPIC_API_KEY), then credentials.yaml.
+func (a *app) apiKey(provider string) string {
+	if k := os.Getenv("VIO_API_KEY"); k != "" {
+		return k
+	}
+	if info, ok := llm.Lookup(provider); ok && info.KeyEnv != "" {
+		if k := os.Getenv(info.KeyEnv); k != "" {
+			return k
+		}
+	}
+	k, _ := config.LoadKey(a.paths, provider)
+	return k
+}
+
+// provider builds the model client from config.
+func (a *app) provider(cfg config.Config) (llm.Provider, error) {
+	return llm.New(llm.Config{Provider: cfg.Provider, Model: cfg.Model, BaseURL: cfg.BaseURL, APIKey: a.apiKey(cfg.Provider)})
 }
 
 func (a *app) ensureDirs() error {
@@ -183,13 +243,4 @@ func (a *app) ensureDirs() error {
 		}
 	}
 	return nil
-}
-
-func firstNonEmpty(s ...string) string {
-	for _, v := range s {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }

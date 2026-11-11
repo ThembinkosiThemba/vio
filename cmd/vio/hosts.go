@@ -218,12 +218,15 @@ func (a *app) trust(ctx context.Context, h *inventory.Host, expectFP string) err
 	switch {
 	case expectFP != "":
 		if fp != expectFP {
-			return fmt.Errorf("%s presented %s %s, expected %s — refusing to trust", h.Name, key.Type(), fp, expectFP)
+			return fmt.Errorf("%s presented %s %s, expected %s; refusing to trust", h.Name, key.Type(), fp, expectFP)
 		}
 	case a.isTTY():
-		fmt.Fprintf(a.stderr, "\n%s (%s) presented host key:\n  %s %s\n\n", h.Name, addr, key.Type(), fp)
-		fmt.Fprintf(a.stderr, "Verify it out-of-band, e.g. in your provider's console run:\n  ssh-keygen -lf /etc/ssh/ssh_host_%s_key.pub\n\n", keyFileType(key))
-		if !a.confirm("Trust this key?") {
+		ok := a.confirm(fmt.Sprintf("Trust the SSH key of %s?", h.Name),
+			fmt.Sprintf("%s presented %s %s", addr, key.Type(), fp),
+			"",
+			"Check it matches before trusting. In your provider's web console, run:",
+			fmt.Sprintf("  ssh-keygen -lf /etc/ssh/ssh_host_%s_key.pub", keyFileType(key)))
+		if !ok {
 			return &exitErr{exitDeclined, errors.New("host key not trusted")}
 		}
 	default:

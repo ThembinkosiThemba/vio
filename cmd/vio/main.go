@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/charmbracelet/huh"
 	"golang.org/x/term"
 
 	"github.com/ThembinkosiThemba/vio/internal/audit"
@@ -41,6 +42,7 @@ Usage:
 Commands:
   ask "<question>"          ask one question and exit
   setup                     choose the model provider
+  reset [--yes]             clear config, API keys, servers, trusted keys, audit log
   init                      create config, inventory, and state directories
   hosts add <name> ...      add a host to the inventory
   hosts ls                  list hosts
@@ -107,7 +109,8 @@ func (a *app) readLine() (string, error) {
 	if err != nil && line == "" {
 		return "", err
 	}
-	return strings.TrimRight(line, "\r\n"), nil
+	// Some shells (Windows PowerShell) prefix piped input with a UTF-8 BOM.
+	return strings.TrimPrefix(strings.TrimRight(line, "\r\n"), "\ufeff"), nil
 }
 
 type usageError struct{ msg string }
@@ -153,6 +156,8 @@ func run(ctx context.Context, args []string, stdin *os.File, stdout, stderr io.W
 		err = a.cmdAsk(ctx, rest)
 	case "setup":
 		_, err = a.setup(ctx)
+	case "reset":
+		err = a.cmdReset(rest)
 	case "check":
 		err = notYet(cmd, 1)
 	case "plan", "apply", "rollback":
@@ -245,16 +250,19 @@ func (a *app) isTTY() bool {
 	return a.stdin != nil && term.IsTerminal(int(a.stdin.Fd()))
 }
 
-// confirm asks a yes/no question on the terminal. Non-TTY input always answers no.
-func (a *app) confirm(question string) bool {
+// confirm asks a yes/no question on the terminal, with optional detail text.
+// Non-TTY input always answers no; so does cancelling the form.
+func (a *app) confirm(question string, detail ...string) bool {
 	if !a.isTTY() {
 		return false
 	}
 	a.pause()
-	fmt.Fprintf(a.stderr, "%s [y/N] ", question)
-	line, _ := a.readLine()
-	line = strings.ToLower(strings.TrimSpace(line))
-	return line == "y" || line == "yes"
+	ok := false
+	c := huh.NewConfirm().Title(question).Affirmative("Yes").Negative("No").Value(&ok)
+	if len(detail) > 0 {
+		c = c.Description(strings.Join(detail, "\n"))
+	}
+	return runForm(huh.NewGroup(c)) == nil && ok
 }
 
 // passphrase prompts once per key file and remembers the answer for this process.
@@ -269,15 +277,17 @@ func (a *app) passphrase(path string) ([]byte, error) {
 		return nil, fmt.Errorf("ssh key %s is encrypted and stdin is not a terminal; load it into ssh-agent", path)
 	}
 	a.pause()
-	fmt.Fprintf(a.stderr, "Passphrase for %s: ", path)
-	pw, err := term.ReadPassword(int(a.stdin.Fd()))
-	fmt.Fprintln(a.stderr)
-	if err != nil {
+	var pw string
+	if err := runForm(huh.NewGroup(huh.NewInput().
+		Title("Passphrase for " + path).
+		Description("Kept in memory for this session only.").
+		EchoMode(huh.EchoModePassword).
+		Value(&pw))); err != nil {
 		return nil, err
 	}
 	if a.pwMem == nil {
 		a.pwMem = map[string][]byte{}
 	}
-	a.pwMem[path] = pw
-	return pw, nil
+	a.pwMem[path] = []byte(pw)
+	return []byte(pw), nil
 }

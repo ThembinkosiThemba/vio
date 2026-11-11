@@ -207,6 +207,18 @@ func TestSessionStopsRepeatedCalls(t *testing.T) {
 	}
 }
 
+func TestSessionWithoutModel(t *testing.T) {
+	s, _, _, _ := newTestSession(t, nil, &transport.Fake{})
+	if err := s.Send(context.Background(), "hi"); !errors.Is(err, ErrNoModel) {
+		t.Fatalf("err = %v; want ErrNoModel", err)
+	}
+	model := &scripted{turns: []llm.Response{answer("hello")}}
+	s.SetModel(model)
+	if err := s.Send(context.Background(), "hi"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTruncate(t *testing.T) {
 	s := strings.Repeat("a", 100) + strings.Repeat("b", 100)
 	out, cut := truncate(s, 50)

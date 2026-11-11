@@ -56,7 +56,8 @@ type Session struct {
 	usage   llm.Usage
 }
 
-// New starts a session.
+// New starts a session. model may be nil; Send then returns ErrNoModel until
+// SetModel is called.
 func New(model llm.Provider, env Env, ui UI, opts Options) (*Session, error) {
 	if opts.MaxSteps <= 0 {
 		opts.MaxSteps = 40
@@ -83,8 +84,18 @@ func (s *Session) refreshSystem() error {
 // Usage returns tokens used so far.
 func (s *Session) Usage() llm.Usage { return s.usage }
 
-// Model returns the provider in use.
+// Model returns the provider in use, or nil if none is configured.
 func (s *Session) Model() llm.Provider { return s.model }
+
+// SetModel switches the provider. The conversation is kept; adapters ignore
+// provider-specific data they don't recognise.
+func (s *Session) SetModel(p llm.Provider) { s.model = p }
+
+// ErrNoModel means the session has no model provider yet.
+var ErrNoModel = errors.New("no model configured")
+
+// Refresh re-reads the inventory into the system prompt, keeping the conversation.
+func (s *Session) Refresh() error { return s.refreshSystem() }
 
 // Reset forgets the conversation (connections are kept).
 func (s *Session) Reset() error {
@@ -107,6 +118,9 @@ var ErrStepLimit = errors.New("step limit reached")
 // answers. On failure the conversation is rolled back to before the message, so
 // the history never holds a tool call without its result.
 func (s *Session) Send(ctx context.Context, text string) error {
+	if s.model == nil {
+		return ErrNoModel
+	}
 	start := len(s.history)
 	s.history = append(s.history, llm.Message{Role: llm.RoleUser, Text: text})
 	seen := map[string]int{}

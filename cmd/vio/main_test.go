@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -77,11 +78,73 @@ func TestCLIAskEndToEnd(t *testing.T) {
 	}
 }
 
+func TestChatTurnShowsReplyAndFooter(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"All quiet.\"},\"finish_reason\":\"stop\"}]}\n\n")
+		io.WriteString(w, "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":1500,\"completion_tokens\":12}}\n\ndata: [DONE]\n\n")
+	}))
+	defer srv.Close()
+	t.Setenv("VIO_CONFIG_DIR", t.TempDir())
+	t.Setenv("VIO_STATE_DIR", t.TempDir())
+	t.Setenv("VIO_PROVIDER", "openai-compatible")
+	t.Setenv("VIO_MODEL", "local-model")
+	t.Setenv("VIO_BASE_URL", srv.URL)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.WriteString(w, "anything wrong?\n/usage\n/exit\n")
+	w.Close()
+	var out, errb bytes.Buffer
+	code := run(context.Background(), nil, r, &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	o := out.String()
+	for _, want := range []string{"local-model · openai-compatible", "  All quiet.", "read-only", "↑ 1.5k", "↓ 12"} {
+		if !strings.Contains(o, want) {
+			t.Errorf("chat output missing %q:\n%s", want, o)
+		}
+	}
+}
+
+func TestCLIReset(t *testing.T) {
+	cfgDir, state := t.TempDir(), t.TempDir()
+	t.Setenv("VIO_CONFIG_DIR", cfgDir)
+	t.Setenv("VIO_STATE_DIR", state)
+
+	runCLI(t, "init")
+	runCLI(t, "hosts", "add", "web-1", "--addr", "203.0.113.10", "--user", "deploy")
+	os.WriteFile(cfgDir+"/credentials.yaml", []byte("anthropic: sk-test\n"), 0o600)
+	os.WriteFile(cfgDir+"/known_hosts", []byte("203.0.113.10 ssh-ed25519 AAAA\n"), 0o600)
+
+	if code, _, errOut := runCLI(t, "reset"); code != 2 || !strings.Contains(errOut, "--yes") {
+		t.Fatalf("reset without a terminal should ask for --yes; exit %d: %s", code, errOut)
+	}
+	code, out, errOut := runCLI(t, "reset", "--yes")
+	if code != 0 || !strings.Contains(out, "Removed") {
+		t.Fatalf("exit %d\n%s\n%s", code, out, errOut)
+	}
+	for _, f := range []string{"config.yaml", "hosts.yaml", "credentials.yaml", "known_hosts"} {
+		if _, err := os.Stat(cfgDir + "/" + f); !os.IsNotExist(err) {
+			t.Errorf("%s still exists", f)
+		}
+	}
+	recs, err := audit.ReadAll(state + "/audit.jsonl")
+	if err != nil || len(recs) != 1 || recs[0].Tool != "reset" || recs[0].Seq != 1 {
+		t.Errorf("audit log should restart with the reset record, got %+v %v", recs, err)
+	}
+	if _, out, _ := runCLI(t, "hosts", "ls"); !strings.Contains(out, "no hosts yet") {
+		t.Errorf("inventory not cleared: %s", out)
+	}
+}
+
 func TestCLIAskWithoutProvider(t *testing.T) {
 	t.Setenv("VIO_CONFIG_DIR", t.TempDir())
 	t.Setenv("VIO_STATE_DIR", t.TempDir())
 	code, _, errOut := runCLI(t, "ask", "hi")
-	if code != 1 || !strings.Contains(errOut, "vio setup") {
+	if code != 1 || !strings.Contains(errOut, "/setup") {
 		t.Fatalf("exit %d, stderr: %s", code, errOut)
 	}
 }

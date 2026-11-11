@@ -75,17 +75,17 @@ func (l *Log) Session() string { return l.session }
 
 // Append fills in Seq, TS, Session, and Prev, and writes r as one line.
 func (l *Log) Append(r Record) (Record, error) {
-	unlock, err := lock(l.path + ".lock")
-	if err != nil {
-		return r, fmt.Errorf("audit: %w", err)
-	}
-	defer unlock()
-
 	f, err := os.OpenFile(l.path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o600)
 	if err != nil {
 		return r, fmt.Errorf("audit: %w", err)
 	}
 	defer f.Close()
+	// An OS lock serialises appends across processes and is released by the
+	// kernel if a process dies, so it can never go stale.
+	if err := lockFile(f); err != nil {
+		return r, fmt.Errorf("audit: lock: %w", err)
+	}
+	defer unlockFile(f)
 
 	last, err := lastLine(f)
 	if err != nil {
@@ -227,28 +227,4 @@ func lastLine(f *os.File) ([]byte, error) {
 		}
 	}
 	return nil, nil
-}
-
-// lock takes a cross-process lock by exclusively creating path. Locks older than
-// 30s are treated as stale (a crashed process) and broken.
-func lock(path string) (func(), error) {
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			f.Close()
-			return func() { os.Remove(path) }, nil
-		}
-		if !errors.Is(err, fs.ErrExist) {
-			return nil, err
-		}
-		if st, serr := os.Stat(path); serr == nil && time.Since(st.ModTime()) > 30*time.Second {
-			os.Remove(path)
-			continue
-		}
-		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("timed out waiting for lock %s", path)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
 }

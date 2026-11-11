@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -91,6 +92,40 @@ func TestVerifyDetectsTampering(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConcurrentAppendsKeepChain(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.jsonl")
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			l, err := Open(path)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			for j := 0; j < 25; j++ {
+				if _, err := l.Append(Record{Kind: KindObserve}); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	n, err := Verify(path)
+	if err != nil || n != 200 {
+		t.Fatalf("Verify = %d, %v; want 200 records and an intact chain", n, err)
+	}
+}
+
+func TestStaleLockFileIsIgnored(t *testing.T) {
+	// Older versions used a sidecar .lock file; a leftover one must not block.
+	path := filepath.Join(t.TempDir(), "audit.jsonl")
+	os.WriteFile(path+".lock", nil, 0o600)
+	writeN(t, path, 1)
 }
 
 func TestVerifyMissingFile(t *testing.T) {

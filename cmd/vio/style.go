@@ -18,6 +18,9 @@ func newStyle(w io.Writer) style {
 	return style{on: enableVT(f)}
 }
 
+// termSize reports the terminal's width and height.
+func termSize(f *os.File) (int, int, error) { return term.GetSize(int(f.Fd())) }
+
 func (s style) wrap(code, text string) string {
 	if !s.on || text == "" {
 		return text
