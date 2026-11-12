@@ -3,7 +3,12 @@
 > A tiny, safety-first agent that runs and secures your servers.
 > Single Go binary. Agentless over SSH. Plans before it touches anything.
 
-Status: **draft v0.1** · Owner: @ThembinkosiThemba · Last updated: 2026-11-11
+Status: **draft v0.1** · Owner: @ThembinkosiThemba · Last updated: 2026-11-12
+
+> **Implementation status (2026-11-12).** Phases 0–4 are implemented except where noted
+> in §11. Where the code deliberately differs from this document (snake_case tool
+> names, data-driven actions, restrict-only YAML policy instead of CEL, deterministic
+> compaction, `sudo -n` only), the reason is in `specs/decisions.md`.
 
 ---
 
@@ -348,6 +353,12 @@ Initial catalog:
 | change | `fs.write`, `fs.patch`, `pkg.install`, `pkg.upgrade`, `svc.start/stop/restart/reload/enable/disable`, `sshd.set`, `fw.allow`, `fw.deny`, `fw.enable`, `user.add`, `user.lock`, `key.add`, `key.remove`, `autoupdates.enable`, `fail2ban.configure`, `timer.add` |
 | dangerous | `shell.exec`, `fs.remove`, `pkg.remove`, `user.remove`, `fw.default_deny`, `host.reboot` |
 
+Implemented names use snake_case (`fs_write`, `sshd_set`, ...); `shell.ro` is
+`run_command`, `fs.read` is `read_file`, and `svc.*` is one `svc_control` tool. Each
+change tool's `Plan` records the exact steps and rollback in the `Action`; `Apply` and
+`Rollback` only execute what the approved action lists (see decisions.md).
+Also implemented: `tls_cert` (observe), `runbook_read`, `output_read`.
+
 `shell.ro` allowlist is argv-prefix based (e.g. `df`, `free`, `uptime`, `ss -tlnp`,
 `systemctl status`, `journalctl --no-pager`), rejects shell metacharacters, and runs
 without a shell. Anything else is `shell.exec` (dangerous).
@@ -657,6 +668,14 @@ Rule: no change tool merges without golden tests, a rollback test, and an integr
 ## 11. Roadmap
 
 Each phase has an exit criterion; a phase is done when it is met, not when code exists.
+
+Code status (2026-11-12): phases 0–4 are built and unit-tested with fakes. Exit criteria
+that need real hosts are **not yet met**: the Docker integration suite
+(`test/integration`), the VM lockout suite, and the injection eval suite (`test/evals`)
+don't exist yet. Not built: `--json` event stream for chat/apply (only `check --json`),
+cost budgets (`max_cost_usd` is not enforced), nftables/iptables change adapters,
+consuming external MCP servers, Docker/Caddy/restic/Postgres-specific tools beyond
+read-only commands and config validators, signed approvals (Q4), and phase 5.
 
 ### Phase 0 — Foundations
 - Move `main.go` → `cmd/vio/main.go`; subcommand dispatcher; `vio version`.

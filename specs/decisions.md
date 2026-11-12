@@ -68,3 +68,61 @@ Revisit if binary size or audit surface becomes a problem.
 write flags and subcommands (`internal/agent/allowlist.go`). No shell, no pipes. Files
 holding password hashes or private keys are never read.
 **Why:** Mutations belong to the plan/apply engine; the reasoning loop stays observe-only.
+
+## 2026-11-12 — Tool names use snake_case
+
+**Decision:** Tools are named `fs_write`, `sshd_set`, `svc_control`, ... instead of the
+dotted `fs.write` in §5.7. The read-only escape hatches keep their names `run_command`
+(spec `shell.ro`) and `read_file` (spec `fs.read`); `svc.start/stop/...` became one
+`svc_control` tool with an `action` argument.
+**Why:** Anthropic and OpenAI tool names must match `^[a-zA-Z0-9_-]+$`; dots are rejected.
+
+## 2026-11-12 — Actions carry their exact steps
+
+**Decision:** `ChangeTool.Plan` returns a `plan.Action` listing every step (`write` a
+file, or `run` an argv) plus the rollback (files to restore, then argv to run). `Apply`
+and `Rollback` are shared (`tools.Steps`) and only execute what the action lists; they
+never re-derive commands from the tool arguments.
+**Why:** Approval binds to the plan hash, so the hash must cover exactly what runs.
+A tool whose `Apply` recomputed commands at apply time could run something the
+operator never saw. Data-driven rollbacks also let the lockout guard write a
+self-contained revert script for the host.
+
+## 2026-11-12 — User policy is restrict-only YAML, not CEL
+
+**Decision:** `~/.config/vio/policy.yaml` holds rules that match on tool, host, tag, tier
+and risk (globs allowed) and can only `deny` or `confirm`. Built-in rules stay in Go.
+**Why:** Covers the phase 3 exit criterion without adding `cel-go` and its transitive
+modules. Restrict-only rules mean a policy file can never weaken a built-in protection.
+Revisit Q1 if operators need conditions over facts or arguments.
+
+## 2026-11-12 — Deterministic context compaction
+
+**Decision:** Every tool output is kept in a session spool under a ref (`o1`, `o2`, ...).
+When tool output in the conversation exceeds a byte budget, older large results are
+replaced by their header plus a pointer to `output_read`. No summarization model call.
+**Why:** No extra model cost or provider dependency, and nothing is lost: the model can
+page back through any output.
+
+## 2026-11-12 — Changes need root or passwordless sudo
+
+**Decision:** vio elevates only with `sudo -n`. Change tools refuse to plan on hosts
+where the login user is neither root nor allowed passwordless sudo. The sudo-password
+prompt in §5.4 is not implemented.
+**Why:** Holding and replaying a sudo password across the guard's fresh connections and
+long-running steps adds secret-handling surface. Revisit with Q2 (keychain).
+
+## 2026-11-12 — MCP server without an SDK
+
+**Decision:** `vio mcp` speaks MCP's JSON-RPC over stdio with a small hand-written loop
+(initialize, tools/list, tools/call, ping) and exposes only observe-tier tools.
+**Why:** The surface is tiny; an SDK would be a new dependency for ~100 lines. Consuming
+external MCP servers (phase 4) is not implemented.
+
+## 2026-11-12 — Plan-file approvals are hash-bound, not signed
+
+**Decision:** `vio apply --approve-only` records an approval (operator, time, hash) in the
+plan file; a later `vio apply` honours it if the hash still matches. Approvals are not
+cryptographically signed yet (Q4 stays open).
+**Why:** Enables the second-operator workflow now. Anyone who can write the file and run
+vio could also approve interactively, so this adds no new capability; docs say so.

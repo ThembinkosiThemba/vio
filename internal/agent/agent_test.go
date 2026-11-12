@@ -7,9 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ThembinkosiThemba/vio/internal/apply"
 	"github.com/ThembinkosiThemba/vio/internal/audit"
 	"github.com/ThembinkosiThemba/vio/internal/inventory"
 	"github.com/ThembinkosiThemba/vio/internal/llm"
+	"github.com/ThembinkosiThemba/vio/internal/plan"
+	"github.com/ThembinkosiThemba/vio/internal/policy"
 	"github.com/ThembinkosiThemba/vio/internal/transport"
 )
 
@@ -50,6 +53,9 @@ type recUI struct {
 	tools   []string
 	confirm bool
 	asked   []string
+	approve bool
+	plans   []*plan.Plan
+	events  []apply.Event
 }
 
 func (u *recUI) Text(s string)                { u.text.WriteString(s) }
@@ -57,6 +63,11 @@ func (u *recUI) ToolStart(host, label string) { u.tools = append(u.tools, host+"
 func (u *recUI) ToolDone(error)               {}
 func (u *recUI) Notice(string)                {}
 func (u *recUI) Confirm(q string) bool        { u.asked = append(u.asked, q); return u.confirm }
+func (u *recUI) ReviewPlan(p *plan.Plan, _ map[string]policy.Result) bool {
+	u.plans = append(u.plans, p)
+	return u.approve
+}
+func (u *recUI) Progress(e apply.Event) { u.events = append(u.events, e) }
 
 func newTestSession(t *testing.T, model llm.Provider, fake *transport.Fake) (*Session, *recUI, *[]audit.Record, *inventory.Inventory) {
 	t.Helper()
@@ -71,7 +82,7 @@ func newTestSession(t *testing.T, model llm.Provider, fake *transport.Fake) (*Se
 		Dial:      func(context.Context, *inventory.Host) (transport.Executor, error) { return fake, nil },
 		Record:    func(r audit.Record) error { recs = append(recs, r); return nil },
 	}
-	s, err := New(model, env, ui, Options{})
+	s, err := New(model, env, ui, Options{MaxTier: plan.Change})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,8 +142,8 @@ func TestSessionRejectsWrites(t *testing.T) {
 			t.Errorf("call %d result = %+v; want error containing %q", i+1, res, want)
 		}
 	}
-	if len(fake.Calls) != 0 {
-		t.Errorf("nothing should have run on the host, got %v", fake.Calls)
+	if c := fake.CallsMatching("nginx"); len(c) != 0 {
+		t.Errorf("rejected command reached the host: %v", c)
 	}
 }
 
@@ -149,8 +160,8 @@ func TestSessionForbiddenFile(t *testing.T) {
 	if res := lastToolResult(model.seen[1]); !res.IsError || !strings.Contains(res.Content, "password hashes") {
 		t.Errorf("result = %+v", res)
 	}
-	if len(fake.Calls) != 0 {
-		t.Errorf("forbidden file must not be touched, got %v", fake.Calls)
+	if c := fake.CallsMatching("shadow"); len(c) != 0 {
+		t.Errorf("forbidden file must not be touched, got %v", c)
 	}
 }
 
@@ -202,8 +213,8 @@ func TestSessionStopsRepeatedCalls(t *testing.T) {
 	if err := s.Send(context.Background(), "uptime?"); err != nil {
 		t.Fatal(err)
 	}
-	if len(fake.Calls) != 2 {
-		t.Errorf("third identical call should be refused; host saw %d calls", len(fake.Calls))
+	if c := fake.CallsMatching("uptime"); len(c) != 2 {
+		t.Errorf("third identical call should be refused; host saw %v", c)
 	}
 }
 

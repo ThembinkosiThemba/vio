@@ -22,15 +22,13 @@ import (
 	"github.com/ThembinkosiThemba/vio/internal/version"
 )
 
-// mode is what the agent may do. Until the plan/apply engine lands it can only look.
-const mode = "read-only"
-
 // chat is the interactive agent: what runs when you type `vio`.
 type chat struct {
 	a       *app
 	ui      *termUI
 	s       *agent.Session
 	cfg     config.Config
+	mode    string // what the agent may do, from max_tier
 	history []string
 	tty     bool
 }
@@ -45,11 +43,16 @@ func (a *app) cmdChat() error {
 	if err != nil {
 		return err
 	}
-	s, err := agent.New(nil, a.agentEnv(), ui, agent.Options{MaxSteps: cfg.Budget.MaxTurns})
+	opts, err := a.agentOptions(cfg, "")
 	if err != nil {
 		return err
 	}
-	c := &chat{a: a, ui: ui, s: s, cfg: cfg, tty: a.isTTY()}
+	ui.guardWindow = cfg.GuardWindow
+	s, err := agent.New(nil, a.agentEnv(), ui, opts)
+	if err != nil {
+		return err
+	}
+	c := &chat{a: a, ui: ui, s: s, cfg: cfg, mode: modeLabel(opts.MaxTier), tty: a.isTTY()}
 	problem := c.loadModel()
 
 	defer func() {
@@ -151,7 +154,7 @@ func (c *chat) turn(ctx context.Context, line string) {
 		c.ui.fail(friendlyError(err, c.cfg))
 	}
 	fmt.Fprintln(c.a.stdout)
-	fmt.Fprintln(c.a.stdout, turnFooter(mode, c.modelLabel(),
+	fmt.Fprintln(c.a.stdout, turnFooter(c.mode, c.modelLabel(),
 		after.InputTokens-before.InputTokens, after.OutputTokens-before.OutputTokens, time.Since(start)))
 	fmt.Fprintln(c.a.stdout)
 }
@@ -193,7 +196,7 @@ func (c *chat) printBanner() {
 	}
 	ver := strings.Fields(version.String())[1]
 	label := c.modelLabel()
-	fmt.Fprint(c.a.stdout, banner(ver, label, mode, names, c.s.Model() != nil))
+	fmt.Fprint(c.a.stdout, banner(ver, label, c.mode, names, c.s.Model() != nil))
 	fmt.Fprintf(c.a.stdout, "  %s\n\n", sFaint.Render("Ask about your servers in plain language. Type / for commands."))
 }
 
@@ -252,12 +255,30 @@ func (c *chat) command(line string) bool {
 			err = c.a.trust(ctx, h, "")
 			fmt.Fprintln(out)
 		}
-	case "check":
+	case "ping":
 		var hosts []*inventory.Host
 		if hosts, err = c.hosts(args); err == nil && len(hosts) > 0 {
 			err = c.a.checkHosts(ctx, hosts)
 			fmt.Fprintln(out)
 		}
+	case "check":
+		var hosts []*inventory.Host
+		if hosts, err = c.hosts(args); err == nil && len(hosts) > 0 {
+			fmt.Fprintln(out)
+			for _, r := range c.a.runChecks(ctx, hosts) {
+				if err = c.a.printFindings(r, false); err != nil {
+					break
+				}
+			}
+			fmt.Fprintf(out, "  %s\n\n", sFaint.Render("Ask me to fix any of these, or run `vio check --fix`."))
+		}
+	case "rollback":
+		if len(args) != 1 {
+			err = errors.New("usage: /rollback <apply-id> (shown after every apply)")
+			break
+		}
+		err = c.a.cmdRollback(ctx, args)
+		fmt.Fprintln(out)
 	case "rm", "remove":
 		var h *inventory.Host
 		if h, err = c.pickHost(args, "Which server do you want to remove?"); err == nil && h != nil {
@@ -560,7 +581,12 @@ func (a *app) cmdAsk(ctx context.Context, args []string) error {
 	}
 	ui := newTermUI(a)
 	a.pauseHook = ui.pause
-	s, err := agent.New(model, a.agentEnv(), ui, agent.Options{MaxSteps: cfg.Budget.MaxTurns})
+	// ask never changes anything (specs/plan.md §5.1).
+	opts, err := a.agentOptions(cfg, "observe")
+	if err != nil {
+		return err
+	}
+	s, err := agent.New(model, a.agentEnv(), ui, opts)
 	if err != nil {
 		return err
 	}
@@ -606,6 +632,8 @@ type termUI struct {
 
 	toolHost, toolLabel string
 	toolStart           time.Time
+
+	guardWindow time.Duration // shown in plan reviews
 }
 
 func newTermUI(a *app) *termUI {

@@ -10,6 +10,7 @@ import (
 	"github.com/ThembinkosiThemba/vio/internal/config"
 	"github.com/ThembinkosiThemba/vio/internal/fsutil"
 	"github.com/ThembinkosiThemba/vio/internal/inventory"
+	"github.com/ThembinkosiThemba/vio/internal/policy"
 )
 
 func (a *app) cmdInit(args []string) error {
@@ -25,6 +26,10 @@ func (a *app) cmdInit(args []string) error {
 	files := []struct{ path, content string }{
 		{a.paths.ConfigFile(), config.DefaultFile},
 		{a.paths.HostsFile(), inventory.Skeleton},
+		{a.paths.PolicyFile(), policy.Skeleton},
+	}
+	if err := os.MkdirAll(a.paths.RunbooksDir(), 0o700); err != nil {
+		return err
 	}
 	for _, f := range files {
 		created, err := writeIfMissing(f.path, f.content)

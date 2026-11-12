@@ -1,4 +1,4 @@
-package agent
+package observe
 
 import (
 	"slices"
@@ -63,6 +63,10 @@ func TestCheckCommand(t *testing.T) {
 		{"top"},
 		{"ls", "a\nb"},
 		{"env"},
+		{"cat", "/etc/shadow"},
+		{"grep", "root", "/etc/gshadow"},
+		{"head", "/home/deploy/.ssh/id_ed25519"},
+		{"sha256sum", "--files0-from=/etc/ssl/private/site.key"},
 	}
 	for _, argv := range bad {
 		if err := CheckCommand(argv); err == nil {

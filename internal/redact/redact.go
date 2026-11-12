@@ -7,6 +7,7 @@ package redact
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"path"
 	"regexp"
 	"strings"
@@ -28,6 +29,8 @@ var rules = []rule{
 	{"api_key", regexp.MustCompile(`\bsk-(?:ant-|proj-|or-)?[A-Za-z0-9_-]{20,}\b`), 0},
 	{"google_api_key", regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}\b`), 0},
 	{"stripe_key", regexp.MustCompile(`\b[rs]k_(?:live|test)_[A-Za-z0-9]{20,}\b`), 0},
+	// crypt(3) password hashes as found in /etc/shadow, e.g. $6$salt$hash or $y$j9T$salt$hash.
+	{"password_hash", regexp.MustCompile(`\$(?:1|2[abxy]?|5|6|7|y|gy|sha1|md5)\$[./A-Za-z0-9$=]{8,}`), 0},
 	{"jwt", regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`), 0},
 	// scheme://user:password@host — keep the user, hide the password.
 	{"url_password", regexp.MustCompile(`\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s:/@]+:([^\s@/]+)@`), 1},
@@ -88,4 +91,16 @@ func Forbidden(p string) (bool, string) {
 		return true, "TLS private key"
 	}
 	return false, ""
+}
+
+// JSON redacts a JSON document. If masking would make it invalid JSON, the
+// redacted text is returned as a JSON string instead, so callers always get
+// valid JSON and never the original secret.
+func JSON(raw []byte) []byte {
+	out := []byte(String(string(raw)))
+	if json.Valid(out) {
+		return out
+	}
+	b, _ := json.Marshal(string(out))
+	return b
 }

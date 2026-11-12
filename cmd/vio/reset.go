@@ -24,6 +24,7 @@ func (a *app) resetItems() []resetItem {
 		{"model", "Model provider and API keys", []string{a.paths.ConfigFile(), a.paths.CredentialsFile()}},
 		{"hosts", "Servers", []string{a.paths.HostsFile()}},
 		{"keys", "Trusted SSH host keys (vio's own; ~/.ssh is never touched)", []string{a.paths.KnownHostsFile()}},
+		{"policy", "Policy rules (policy.yaml)", []string{a.paths.PolicyFile()}},
 		{"audit", "Audit log", []string{a.paths.AuditFile()}},
 	}
 }

@@ -73,6 +73,12 @@ func (p Paths) HostsFile() string { return filepath.Join(p.ConfigDir, "hosts.yam
 // KnownHostsFile is vio's own known_hosts, written by `vio hosts trust`.
 func (p Paths) KnownHostsFile() string { return filepath.Join(p.ConfigDir, "known_hosts") }
 
+// PolicyFile holds the operator's policy rules.
+func (p Paths) PolicyFile() string { return filepath.Join(p.ConfigDir, "policy.yaml") }
+
+// RunbooksDir holds the operator's own runbooks.
+func (p Paths) RunbooksDir() string { return filepath.Join(p.ConfigDir, "runbooks") }
+
 // AuditFile is the append-only audit log.
 func (p Paths) AuditFile() string { return filepath.Join(p.StateDir, "audit.jsonl") }
 

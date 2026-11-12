@@ -40,7 +40,13 @@ Usage:
   vio <command> [arguments]
 
 Commands:
-  ask "<question>"          ask one question and exit
+  ask "<question>"          ask one question and exit (read-only)
+  check [host] [--fix]      run the security baseline; --fix proposes a plan
+  plan "<goal>" [-H host]   have the agent write a plan file (plan.json)
+  apply plan.json           review and apply a plan with guards
+  rollback <apply-id>       undo an applied plan
+  watch [--every 1h]        re-check on a schedule; --webhook URL for alerts
+  mcp                       serve read-only tools over MCP (stdio)
   setup                     choose the model provider
   reset [--yes]             clear config, API keys, servers, trusted keys, audit log
   init                      create config, inventory, and state directories
@@ -51,9 +57,6 @@ Commands:
   hosts check [name|group]  connect to hosts and report basic facts
   log [--verify] [-n N]     show or verify the audit log
   version                   print version information
-
-Coming in later phases:
-  check, plan, apply, rollback
 
 Run 'vio <command> -h' for command help.
 `
@@ -159,9 +162,17 @@ func run(ctx context.Context, args []string, stdin *os.File, stdout, stderr io.W
 	case "reset":
 		err = a.cmdReset(rest)
 	case "check":
-		err = notYet(cmd, 1)
-	case "plan", "apply", "rollback":
-		err = notYet(cmd, 2)
+		err = a.cmdCheck(ctx, rest)
+	case "plan":
+		err = a.cmdPlan(ctx, rest)
+	case "apply":
+		err = a.cmdApply(ctx, rest)
+	case "rollback":
+		err = a.cmdRollback(ctx, rest)
+	case "watch":
+		err = a.cmdWatch(ctx, rest)
+	case "mcp":
+		err = a.cmdMCP(ctx, rest)
 	default:
 		err = usagef("unknown command %q", cmd)
 	}
@@ -186,10 +197,6 @@ func (a *app) exitCode(err error) int {
 		return ee.code
 	}
 	return exitError
-}
-
-func notYet(cmd string, phase int) error {
-	return fmt.Errorf("'vio %s' is not implemented yet (roadmap phase %d, see specs/plan.md §11)", cmd, phase)
 }
 
 // newFlags returns a FlagSet whose errors and help go to stderr.

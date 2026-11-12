@@ -102,7 +102,7 @@ func TestChatTurnShowsReplyAndFooter(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, errb.String())
 	}
 	o := out.String()
-	for _, want := range []string{"local-model · openai-compatible", "  All quiet.", "read-only", "↑ 1.5k", "↓ 12"} {
+	for _, want := range []string{"local-model · openai-compatible", "  All quiet.", "changes need approval", "↑ 1.5k", "↓ 12"} {
 		if !strings.Contains(o, want) {
 			t.Errorf("chat output missing %q:\n%s", want, o)
 		}

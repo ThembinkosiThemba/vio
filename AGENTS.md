@@ -13,8 +13,9 @@ through a typed plan → policy → approval → guarded apply → verify → au
 - Decision log: [specs/decisions.md](specs/decisions.md) — append an entry for any
   architectural choice or new dependency.
 
-Status: pre-alpha, Phase 0 (foundations). Check the roadmap in `specs/plan.md` §11
-for what is in scope right now; don't build later-phase features early.
+Status: pre-alpha. Phases 0–4 are implemented; integration, lockout and injection-eval
+suites are still missing (see `specs/plan.md` §11). Phase 5 (on-host agent) is out of
+scope until those exist.
 
 ## Commands
 
@@ -42,14 +43,16 @@ internal/llm        Provider interface + adapters
 internal/transport  Executor interface; local + ssh
 internal/tools      tool registry; observe/, change/, adapters/
 internal/plan       Plan/Action model, hashing, diffs, preconditions
-internal/policy     deterministic rules
+internal/policy     deterministic rules + restrict-only policy.yaml
 internal/apply      guarded apply engine
 internal/guard      lockout dead-man switch, validators, probes
 internal/redact     secret masking
 internal/audit      hash-chained JSONL log
 internal/checks     deterministic security baseline (no LLM)
+internal/facts      host facts (distro, init, package manager, firewall, SSH port)
+internal/runbooks   embedded + operator markdown runbooks
 specs/              plan.md, decisions.md
-site/               static landing page (plain HTML/CSS, no build step)
+site/               landing page and docs.html (plain HTML/CSS, no build step)
 assets/             logo
 ```
 

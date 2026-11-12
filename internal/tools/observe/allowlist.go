@@ -1,9 +1,11 @@
-package agent
+package observe
 
 import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/ThembinkosiThemba/vio/internal/redact"
 )
 
 // The agent may only run commands that cannot change the host. Each entry checks
@@ -231,6 +233,18 @@ func CheckCommand(argv []string) error {
 	for _, a := range argv {
 		if strings.ContainsAny(a, "\x00\n\r") {
 			return fmt.Errorf("arguments may not contain control characters")
+		}
+	}
+	// Files that are wholly secret stay unreadable whichever command asks.
+	// Recursive reads of their directories are covered by redaction instead.
+	for _, a := range argv[1:] {
+		_, v, _ := strings.Cut(a, "=")
+		for _, p := range []string{a, v} {
+			if strings.HasPrefix(p, "/") {
+				if bad, why := redact.Forbidden(p); bad {
+					return fmt.Errorf("%s holds %s and is never read into the conversation", p, why)
+				}
+			}
 		}
 	}
 	name := argv[0]

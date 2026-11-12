@@ -1,6 +1,7 @@
 package redact
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -16,6 +17,8 @@ func TestStringMasksSecrets(t *testing.T) {
 		{"jwt", "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U", "eyJzdWIi", "Bearer"},
 		{"url password", "DATABASE_URL=postgres://app:hunter22@db:5432/app", "hunter22", "postgres://app:"},
 		{"env assignment", "DB_PASSWORD=correcthorse\nPORT=8080", "correcthorse", "PORT=8080"},
+		{"shadow", "root:$6$rounds=5000$abcdefgh$" + strings.Repeat("a", 40) + ":19000:0:99999:7:::", "abcdefgh", "root:"},
+		{"yescrypt", "deploy:$y$j9T$F5Jx5fExrKuPp53xLKQ..1$X3DX6M94c7o.9agCG9G317fhZg9SqC.5i5rd.RhAtQ7:19000::::::", "F5Jx5fExr", "deploy:"},
 		{"yaml", "  client_secret: \"s3cr3t-value\"\n  name: web", "s3cr3t-value", "name: web"},
 	}
 	for _, tt := range tests {
@@ -70,5 +73,13 @@ func TestForbidden(t *testing.T) {
 		if got, _ := Forbidden(p); got != want {
 			t.Errorf("Forbidden(%q) = %v; want %v", p, got, want)
 		}
+	}
+}
+
+func TestJSON(t *testing.T) {
+	in := []byte(`{"path":"/srv/.env","content":"API_KEY=sk-ant-api03-` + strings.Repeat("x", 30) + `"}`)
+	out := JSON(in)
+	if strings.Contains(string(out), "sk-ant") || !json.Valid(out) {
+		t.Errorf("JSON = %s", out)
 	}
 }

@@ -19,7 +19,9 @@
 ---
 
 > **Status: pre-alpha.** vio is being built in the open. The architecture is in
-> [specs/plan.md](specs/plan.md); nothing here is ready for production servers yet.
+> [specs/plan.md](specs/plan.md). Phases 0–4 are implemented and unit-tested, but the
+> integration and lockout test suites against real hosts don't exist yet: try it on a
+> server you can rebuild before trusting it with production.
 
 ## What is vio?
 
@@ -38,7 +40,7 @@ need your approval. They run under a guard that auto-reverts if you lose access,
 every step is recorded in a tamper-evident audit log.
 
 ```text
-$ vio check -H web-1 --fix
+$ vio check web-1 --fix
 ● web-1  ubuntu 24.04 · systemd · apt · ufw (inactive)
   ✗ high     VIO-SSH-002  PasswordAuthentication yes
   ✗ high     VIO-FW-001   firewall inactive; 4 ports listening publicly
@@ -93,19 +95,24 @@ checksum, and put the binary on your PATH. Set `VIO_VERSION=v0.1.0` to pin a ver
 > No release is tagged yet. Until then, build from source (Go 1.26+):
 > `go install github.com/ThembinkosiThemba/vio/cmd/vio@latest`
 
-## Usage (planned)
+## Usage
 
 ```sh
-vio init                                   # config, default policy, inventory
+vio                                        # chat: ask, investigate, approve fixes
+vio init                                   # config, policy, inventory
 vio hosts add web-1 --addr 203.0.113.10 --user deploy --trust
-vio ask -H web-1 "why is disk usage at 95%?"
-vio check -H web-1                         # security baseline, no LLM
-vio check -H web-1 --fix                   # baseline + proposed fix plan
+vio ask "why is disk usage at 95% on web-1?"   # one read-only question
+vio check web-1                            # security baseline, no LLM
+vio check web-1 --fix                      # baseline + proposed fix plan
 vio plan -H web-1 "install fail2ban for sshd" -o plan.json
 vio apply plan.json
 vio rollback <apply-id>
+vio watch prod --every 1h --webhook <url>  # drift alerts
+vio mcp                                    # read-only tools for other agents
 vio log --verify
 ```
+
+Full documentation: [site/docs.html](site/docs.html).
 
 ## How it works
 
