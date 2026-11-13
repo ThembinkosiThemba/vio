@@ -4,7 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/ThembinkosiThemba/vio/main/site/install.sh | sh
 #
 # Environment overrides:
-#   VIO_VERSION      release tag to install (default: latest), e.g. v0.1.0
+#   VIO_VERSION      release tag to install (default: latest), e.g. v0.1.1
 #   VIO_INSTALL_DIR  where to put the binary (default: /usr/local/bin if writable, else ~/.local/bin)
 #   VIO_DOWNLOAD_URL base URL for release assets (mirrors, testing)
 #

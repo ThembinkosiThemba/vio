@@ -36,7 +36,6 @@ type UserRule struct {
 	Message  string   `yaml:"message"`
 
 	decision Decision
-	host     map[string][]string
 }
 
 // ID implements Rule.

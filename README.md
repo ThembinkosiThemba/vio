@@ -90,7 +90,7 @@ irm https://raw.githubusercontent.com/ThembinkosiThemba/vio/main/site/install.ps
 ```
 
 Then run `vio`. The installers download the latest release, verify its SHA-256
-checksum, and put the binary on your PATH. Set `VIO_VERSION=v0.1.0` to pin a version.
+checksum, and put the binary on your PATH. Set `VIO_VERSION=v0.1.1` to pin a version.
 
 > No release is tagged yet. Until then, build from source (Go 1.26+):
 > `go install github.com/ThembinkosiThemba/vio/cmd/vio@latest`

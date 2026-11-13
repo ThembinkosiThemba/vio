@@ -3,7 +3,7 @@
 #   irm https://raw.githubusercontent.com/ThembinkosiThemba/vio/main/site/install.ps1 | iex
 #
 # Environment overrides:
-#   VIO_VERSION      release tag to install (default: latest), e.g. v0.1.0
+#   VIO_VERSION      release tag to install (default: latest), e.g. v0.1.1
 #   VIO_INSTALL_DIR  where to put vio.exe (default: %LOCALAPPDATA%\vio\bin)
 #   VIO_DOWNLOAD_URL base URL for release assets (mirrors, testing)
 #   VIO_NO_MODIFY_PATH=1  don't add the install dir to your user PATH
