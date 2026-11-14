@@ -192,6 +192,21 @@ func TestSessionAddHostNeedsConfirmation(t *testing.T) {
 	}
 }
 
+func TestSessionAddHostCannotAttachLocal(t *testing.T) {
+	model := &scripted{turns: []llm.Response{
+		call("c1", "add_host", `{"name":"me","local":true}`),
+		answer("Could not add it."),
+	}}
+	s, ui, _, inv := newTestSession(t, model, &transport.Fake{})
+	ui.confirm = true
+	if err := s.Send(context.Background(), "manage this machine"); err != nil {
+		t.Fatal(err)
+	}
+	if inv.Hosts["me"] != nil || len(ui.asked) != 0 {
+		t.Fatalf("model attached a local host (asked=%v)", ui.asked)
+	}
+}
+
 func TestSessionRollsBackOnModelError(t *testing.T) {
 	model := &scripted{err: errors.New("connection refused")}
 	s, _, _, _ := newTestSession(t, model, &transport.Fake{})

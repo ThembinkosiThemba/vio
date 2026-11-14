@@ -59,7 +59,7 @@ func systemPrompt(inv *inventory.Inventory, opts Options) string {
 		b.WriteString("(none yet)\n")
 	}
 	for _, h := range hosts {
-		fmt.Fprintf(&b, "- %s (%s@%s)", h.Name, h.User, h.Endpoint())
+		fmt.Fprintf(&b, "- %s (%s)", h.Name, h.Target())
 		if len(h.Tags) > 0 {
 			fmt.Fprintf(&b, " tags: %s", strings.Join(h.Tags, ", "))
 		}

@@ -50,7 +50,9 @@ Commands:
   setup                     choose the model provider
   reset [--yes]             clear config, API keys, servers, trusted keys, audit log
   init                      create config, inventory, and state directories
-  hosts add <name> ...      add a host to the inventory
+  attach [name]             attach the machine vio runs on (hosts add --local)
+  hosts add <name> ...      add a host; details default to ~/.ssh/config
+  hosts import [--yes]      add every host in ~/.ssh/config
   hosts ls                  list hosts
   hosts rm <name>           remove a host
   hosts trust <name>        verify and record a host's SSH key
@@ -153,6 +155,8 @@ func run(ctx context.Context, args []string, stdin *os.File, stdout, stderr io.W
 		err = a.cmdInit(rest)
 	case "hosts":
 		err = a.cmdHosts(ctx, rest)
+	case "attach":
+		err = a.cmdHosts(ctx, append([]string{"add", "--local"}, rest...))
 	case "log":
 		err = a.cmdLog(rest)
 	case "ask":

@@ -383,10 +383,13 @@ func (s *Session) addHost(raw json.RawMessage) (string, error) {
 	}
 	_ = json.Unmarshal(raw, &in)
 	h.Name = strings.ToLower(strings.TrimSpace(in.Name))
+	// Pointing vio at the operator's own machine is the operator's call
+	// (`vio attach`), never the model's.
+	h.Local = false
 	if err := h.Validate(); err != nil {
 		return "", err
 	}
-	q := fmt.Sprintf("Add %s (%s@%s) to your inventory?", h.Name, h.User, h.Endpoint())
+	q := fmt.Sprintf("Add %s (%s) to your inventory?", h.Name, h.Target())
 	if !s.ui.Confirm(q) {
 		return "The operator declined. Nothing was added.", nil
 	}

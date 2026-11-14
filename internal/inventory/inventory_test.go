@@ -22,6 +22,11 @@ func TestAddValidation(t *testing.T) {
 		{"missing addr", Host{Name: "x", User: "u"}, false},
 		{"missing user", Host{Name: "x", Addr: "a"}, false},
 		{"bad port", Host{Name: "x", Addr: "a", User: "u", Port: 70000}, false},
+		{"local", Host{Name: "x", Local: true}, true},
+		{"local with addr", Host{Name: "x", Local: true, Addr: "a"}, false},
+		{"local with port", Host{Name: "x", Local: true, Port: 22}, false},
+		{"local with user", Host{Name: "x", Local: true, User: "u"}, false},
+		{"local with identity", Host{Name: "x", Local: true, Identity: "k"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -107,5 +112,32 @@ func TestEndpoint(t *testing.T) {
 	}
 	if got := (Host{Addr: "example.com"}).Endpoint(); got != "example.com:22" {
 		t.Errorf("default port Endpoint = %q", got)
+	}
+}
+
+func TestTarget(t *testing.T) {
+	if got := (Host{Local: true}).Target(); got != "local" {
+		t.Errorf("local Target = %q", got)
+	}
+	if got := (Host{Addr: "2001:db8::1", Port: 2222, User: "deploy"}).Target(); got != "deploy@[2001:db8::1]:2222" {
+		t.Errorf("Target = %q", got)
+	}
+}
+
+func TestLocalRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hosts.yaml")
+	inv, _ := Load(path)
+	if err := inv.Add(Host{Name: "box", Local: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := inv.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	inv2, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h := inv2.Hosts["box"]; h == nil || !h.Local || h.Addr != "" {
+		t.Errorf("box = %+v", h)
 	}
 }

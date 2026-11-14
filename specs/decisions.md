@@ -126,3 +126,22 @@ plan file; a later `vio apply` honours it if the hash still matches. Approvals a
 cryptographically signed yet (Q4 stays open).
 **Why:** Enables the second-operator workflow now. Anyone who can write the file and run
 vio could also approve interactively, so this adds no new capability; docs say so.
+
+## 2026-11-14 — Zero-detail host attach: `local` hosts and a stdlib ssh-config reader
+
+**Decision:** Inventory hosts gain `local: true` for the machine vio runs on (served by
+`transport.Local`, no SSH, no host key). `local` excludes `addr`, `port`, `user` and
+`identity`, so `Validate` stays strict for both kinds rather than allowing half-empty
+SSH hosts. `vio hosts add <alias>` and `vio hosts import` read `~/.ssh/config` through a
+new `internal/sshconfig` package: Host/HostName/User/Port/IdentityFile/Include,
+first-match-wins, `~` and `%h`/`%d` expansion, quotes. Constructs vio cannot honour
+(`Match`, `ProxyJump`, `ProxyCommand`, `HostKeyAlias`, ...) become warnings on the host's
+notes. The model's `add_host` can never create a local host. Keys already in
+`~/.ssh/known_hosts` are reused by `hosts trust` without a prompt (they were already
+honoured at dial time); unknown keys still fail closed.
+**Why:** The details vio asked for are already on the operator's machine; retyping them
+causes typos and drift from what `ssh` does. The subset of ssh_config needed is ~300
+lines, so a dependency (e.g. `kevinburke/ssh_config`) is not worth its surface.
+**Alternatives:** Shelling out to `ssh -G <alias>` (needs OpenSSH on the operator
+machine and runs `Match exec`, i.e. arbitrary commands from config); a third-party
+parser; relaxing `Validate` to allow missing `addr`/`user`.
