@@ -302,6 +302,7 @@ footer a:hover { color: var(--text); }
   <span class="ok">✓</span> <span class="d">web-1  a1</span> sshd PasswordAuthentication=no
   ...</pre>
       <p>Prefer files to chat? <code>vio init</code> creates <code>config.yaml</code>, <code>hosts.yaml</code> and <code>policy.yaml</code>, and <code>vio hosts add web-1 --addr 203.0.113.10 --user deploy --trust</code> adds and verifies a server in one go.</p>
+      <p>Usually you don't need to type any of that. <code>vio attach</code> adds the machine vio runs on (no SSH, Linux only). <code>vio hosts add web-1</code> reads <code>HostName</code>, <code>User</code>, <code>Port</code> and <code>IdentityFile</code> from the matching <code>Host</code> in <code>~/.ssh/config</code>, and any flag you pass wins. <code>vio hosts import</code> lists every host in <code>~/.ssh/config</code>; add <code>--yes</code> to import them.</p>
     </section>
 
     <section id="models">
@@ -342,7 +343,7 @@ groups:
         <li><strong>groups</strong> work anywhere a host name does, e.g. <code>vio check prod</code>.</li>
       </ul>
       <h3>Host keys</h3>
-      <p>vio verifies SSH host keys strictly. It reads your <code>~/.ssh/known_hosts</code> and its own <code>known_hosts</code>, and refuses unknown keys rather than trusting them on first use. Record a key with <code>vio hosts trust web-1</code> (it shows the fingerprint and asks), or non-interactively with <code>--fingerprint SHA256:…</code>.</p>
+      <p>vio verifies SSH host keys strictly. It reads your <code>~/.ssh/known_hosts</code> and its own <code>known_hosts</code>, and refuses unknown keys rather than trusting them on first use. Record a key with <code>vio hosts trust web-1</code> (it shows the fingerprint and asks), or non-interactively with <code>--fingerprint SHA256:…</code>. A key you already accepted with <code>ssh</code> is reused without asking again.</p>
       <h3>Authentication</h3>
       <p>vio uses ssh-agent first, then the <code>identity</code> file, then your default keys. Encrypted keys prompt for a passphrase once per session; it stays in memory. vio never uses password authentication, agent forwarding or port forwarding.</p>
     </section>
@@ -645,7 +646,8 @@ budget:
           <tr><td><code>vio rollback &lt;apply-id&gt;</code></td><td>Undo an apply. <code>--yes</code> skips the question.</td></tr>
           <tr><td><code>vio watch [host|group…]</code></td><td>Scheduled baseline. <code>--every</code>, <code>--webhook</code>, <code>--once</code>.</td></tr>
           <tr><td><code>vio mcp</code></td><td>Serve read-only tools over MCP on stdio.</td></tr>
-          <tr><td><code>vio hosts add|ls|rm|trust|check</code></td><td>Manage the inventory and host keys; test connections.</td></tr>
+          <tr><td><code>vio attach [name]</code></td><td>Add the machine vio runs on as a local host.</td></tr>
+          <tr><td><code>vio hosts add|import|ls|rm|trust|check</code></td><td>Manage the inventory and host keys; test connections. <code>add</code> and <code>import</code> read <code>~/.ssh/config</code>.</td></tr>
           <tr><td><code>vio setup</code>, <code>vio init</code>, <code>vio reset</code></td><td>Choose a model; create config files; forget settings.</td></tr>
           <tr><td><code>vio log [--verify] [-n N]</code></td><td>Show or verify the audit log.</td></tr>
           <tr><td><code>vio version</code></td><td>Version and build information.</td></tr>

@@ -100,6 +100,9 @@ checksum, and put the binary on your PATH. Set `VIO_VERSION=v0.1.1` to pin a ver
 ```sh
 vio                                        # chat: ask, investigate, approve fixes
 vio init                                   # config, policy, inventory
+vio attach                                 # manage the machine vio runs on
+vio hosts add web-1                        # details from ~/.ssh/config
+vio hosts import --yes                     # every Host in ~/.ssh/config
 vio hosts add web-1 --addr 203.0.113.10 --user deploy --trust
 vio ask "why is disk usage at 95% on web-1?"   # one read-only question
 vio check web-1                            # security baseline, no LLM

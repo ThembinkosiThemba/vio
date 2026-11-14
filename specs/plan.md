@@ -136,6 +136,7 @@ vio/
     llm/                Provider interface + adapters (anthropic, openai-compatible)
     transport/          Executor interface; local + ssh implementations
     inventory/          hosts.yaml loading, host groups, per-host notes
+    sshconfig/          ~/.ssh/config reader for zero-detail host attach
     facts/              host fact gathering (distro, init, pkg mgr, firewall backend)
     tools/              tool registry, tiers, schemas
       observe/          read-only tools
@@ -178,7 +179,8 @@ Stdlib `flag` with a small subcommand dispatcher. No CLI framework.
 | `vio plan "<goal>" -H host -o plan.json` | Produce a plan file for review | no |
 | `vio apply plan.json` | Execute an approved plan with guards | yes |
 | `vio rollback <apply-id>` | Revert an applied plan using stored rollbacks | yes |
-| `vio hosts add\|ls\|rm\|check` | Manage inventory; `check` tests connectivity + host key | no |
+| `vio hosts add\|import\|ls\|rm\|trust\|check` | Manage inventory; `check` tests connectivity + host key | no |
+| `vio attach [name]` | Attach the machine vio runs on (`hosts add --local`) | local only |
 | `vio log [--verify]` | Show / verify the audit log | no |
 | `vio init` | Create config, default policy, inventory skeleton | local only |
 | `vio version` | Version, commit, build info | no |
@@ -305,6 +307,23 @@ groups:
 
 `notes` are operator-authored context given to the model. They are trusted because
 they come from the operator, unlike anything read from the host.
+
+Attaching a host should need as little typing as possible:
+
+- `vio attach [name]` (= `vio hosts add --local`) adds the machine vio runs on as
+  `local: true`. It is reached through `transport.Local`, so there is no addr, user,
+  port, identity or host key; the name defaults to the short hostname. Linux only.
+  The model's `add_host` tool can never create a local host.
+- `vio hosts add <alias>` fills any of `addr`/`user`/`port`/`identity` not given as
+  flags from the matching `Host` in `~/.ssh/config` (`internal/sshconfig`), as
+  `ssh <alias>` would. Flags win. An alias with no `Host` entry fails, naming the
+  missing flags. Settings vio ignores (`ProxyJump`, `Match`, ...) are appended to the
+  host's notes as warnings.
+- `vio hosts import` lists every concrete `Host` (no wildcards or negations), skipping
+  names already in the inventory and servers already present under another name.
+  Dry run by default; `--yes` writes and audits each host.
+- `vio hosts trust` accepts a key already recorded in `~/.ssh/known_hosts` (it prints
+  the fingerprint) instead of prompting. Unknown or mismatched keys still fail.
 
 ### 5.6 Facts (`internal/facts`)
 

@@ -223,3 +223,50 @@ func TestSSHWrongClientKeyRefused(t *testing.T) {
 		t.Fatal("dial with an unauthorized key should fail")
 	}
 }
+
+// A key the operator already accepted with ssh (in ~/.ssh/known_hosts) is
+// honoured without re-trusting, and a different key there is still refused.
+func TestSSHReusesExtraKnownHosts(t *testing.T) {
+	srv := startServer(t)
+	dir := t.TempDir()
+	tests := []struct {
+		name     string
+		key      ssh.PublicKey
+		wantErr  bool
+		mismatch bool
+	}{
+		{"recorded key", srv.hostKey, false, false},
+		{"different key", nil, true, true},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key := tt.key
+			if key == nil {
+				impostor, _ := newKey(t)
+				key = impostor.PublicKey()
+			}
+			extra := HostKeys{VioFile: filepath.Join(dir, "ssh_known_hosts_"+string(rune('a'+i)))}
+			if err := extra.Trust(srv.addr, key); err != nil {
+				t.Fatal(err)
+			}
+			hk := HostKeys{VioFile: filepath.Join(dir, "vio_known_hosts"), Extra: []string{extra.VioFile}}
+			x, err := dialTest(t, srv, hk)
+			if err == nil {
+				x.Close()
+			}
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("dial err = %v; wantErr %v", err, tt.wantErr)
+			}
+			var mm *HostKeyMismatchError
+			if tt.mismatch && !errors.As(err, &mm) {
+				t.Fatalf("err = %v; want HostKeyMismatchError", err)
+			}
+			if err := hk.Check(srv.addr, srv.hostKey); (err == nil) == tt.mismatch {
+				t.Errorf("Check = %v", err)
+			}
+			if _, statErr := os.Stat(hk.VioFile); statErr == nil {
+				t.Error("vio's known_hosts was written; reuse must not copy keys")
+			}
+		})
+	}
+}

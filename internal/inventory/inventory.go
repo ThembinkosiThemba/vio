@@ -18,11 +18,15 @@ import (
 
 // Host is one server. Notes are operator-authored context for the agent; unlike
 // anything read from the host itself, they are trusted.
+//
+// A Local host is the machine vio runs on, reached without SSH. It has no
+// addr, port or identity, so there is no host key to trust.
 type Host struct {
 	Name     string   `yaml:"-"`
-	Addr     string   `yaml:"addr"`
+	Local    bool     `yaml:"local,omitempty"`
+	Addr     string   `yaml:"addr,omitempty"`
 	Port     int      `yaml:"port,omitempty"`
-	User     string   `yaml:"user"`
+	User     string   `yaml:"user,omitempty"`
 	Identity string   `yaml:"identity,omitempty"`
 	Tags     []string `yaml:"tags,omitempty,flow"`
 	Notes    string   `yaml:"notes,omitempty"`
@@ -35,6 +39,14 @@ func (h Host) Endpoint() string {
 		port = 22
 	}
 	return net.JoinHostPort(h.Addr, strconv.Itoa(port))
+}
+
+// Target describes where h is reached, for display: "user@addr:port" or "local".
+func (h Host) Target() string {
+	if h.Local {
+		return "local"
+	}
+	return h.User + "@" + h.Endpoint()
 }
 
 // Inventory is the parsed hosts.yaml.
@@ -57,6 +69,12 @@ func ValidateName(s string) error {
 func (h *Host) Validate() error {
 	if err := ValidateName(h.Name); err != nil {
 		return err
+	}
+	if h.Local {
+		if h.Addr != "" || h.Port != 0 || h.Identity != "" || h.User != "" {
+			return fmt.Errorf("host %s: a local host takes no addr, port, user or identity", h.Name)
+		}
+		return nil
 	}
 	if h.Addr == "" {
 		return fmt.Errorf("host %s: addr is required", h.Name)
@@ -200,7 +218,11 @@ func (inv *Inventory) All() []*Host {
 }
 
 // Skeleton is the commented hosts.yaml written by `vio init`.
-const Skeleton = `# vio inventory. Add hosts with: vio hosts add <name> --addr <ip> --user <user>
+const Skeleton = `# vio inventory. Add hosts with:
+#   vio attach                 this machine
+#   vio hosts add <ssh-alias>  a host from ~/.ssh/config
+#   vio hosts import           every host in ~/.ssh/config
+#   vio hosts add <name> --addr <ip> --user <user>
 #
 # hosts:
 #   web-1:
@@ -211,6 +233,8 @@ const Skeleton = `# vio inventory. Add hosts with: vio hosts add <name> --addr <
 #     tags: [prod, web]
 #     notes: |
 #       Caddy reverse proxy for app.example.com.
+#   this-box:
+#     local: true
 # groups:
 #   prod: [web-1]
 hosts: {}

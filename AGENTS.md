@@ -49,6 +49,7 @@ internal/guard      lockout dead-man switch, validators, probes
 internal/redact     secret masking
 internal/audit      hash-chained JSONL log
 internal/checks     deterministic security baseline (no LLM)
+internal/sshconfig  ~/.ssh/config reader (hosts add <alias>, hosts import)
 internal/facts      host facts (distro, init, package manager, firewall, SSH port)
 internal/runbooks   embedded + operator markdown runbooks
 specs/              plan.md, decisions.md

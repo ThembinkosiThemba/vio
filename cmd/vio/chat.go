@@ -389,10 +389,10 @@ func (c *chat) listHosts() {
 	nameW, epW := 4, 8
 	for _, h := range inv.All() {
 		nameW = max(nameW, len(h.Name))
-		epW = max(epW, len(h.User)+1+len(h.Endpoint()))
+		epW = max(epW, len(h.Target()))
 	}
 	for _, h := range inv.All() {
-		ep := h.User + "@" + h.Endpoint()
+		ep := h.Target()
 		fmt.Fprintf(out, "  %s  %s  %s\n",
 			sBold.Render(h.Name+strings.Repeat(" ", nameW-len(h.Name))),
 			sMuted.Render(ep+strings.Repeat(" ", epW-len(ep))),
@@ -440,7 +440,7 @@ func (c *chat) pickHost(args []string, title string) (*inventory.Host, error) {
 	}
 	opts := make([]huh.Option[string], len(all))
 	for i, h := range all {
-		opts[i] = huh.NewOption(h.Name+"  "+sFaint.Render(h.User+"@"+h.Endpoint()), h.Name)
+		opts[i] = huh.NewOption(h.Name+"  "+sFaint.Render(h.Target()), h.Name)
 	}
 	var name string
 	if err := runForm(huh.NewGroup(huh.NewSelect[string]().Title(title).Options(opts...).Value(&name))); err != nil {
@@ -504,7 +504,7 @@ func (c *chat) addHost(ctx context.Context) error {
 	if err := c.s.Refresh(); err != nil {
 		return err
 	}
-	fmt.Fprintf(c.a.stdout, "  %s Added %s %s\n", sAccent.Render("✓"), sBold.Render(h.Name), sMuted.Render(h.User+"@"+h.Endpoint()))
+	fmt.Fprintf(c.a.stdout, "  %s Added %s %s\n", sAccent.Render("✓"), sBold.Render(h.Name), sMuted.Render(h.Target()))
 	if c.a.confirm("Verify and trust its SSH key now?", "vio connects only to servers whose key you have trusted.") {
 		if err := c.a.trust(ctx, c.mustHost(h.Name), ""); err != nil {
 			return err
